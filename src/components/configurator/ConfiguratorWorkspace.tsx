@@ -15,6 +15,7 @@ import {
 import { TemplateWizard } from "@/components/configurator/TemplateWizard";
 import { CustomDishBuilder } from "@/components/configurator/CustomDishBuilder";
 import { SaveDishPanel } from "@/components/configurator/SaveDishPanel";
+import { useCustomIngredients } from "@/components/configurator/useCustomIngredients";
 
 /** Where the user lands after saving a dish. */
 const AFTER_SAVE_PATH = "/gerechten";
@@ -26,6 +27,7 @@ const AFTER_SAVE_PATH = "/gerechten";
 export function ConfiguratorWorkspace() {
   const router = useRouter();
   const { dishes, upsertDish } = useApp();
+  const customIngredients = useCustomIngredients();
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [customName, setCustomName] = useState<string | null>(null);
@@ -82,7 +84,14 @@ export function ConfiguratorWorkspace() {
 
       <TemplateWizard hasExistingDraft={countItems(draft) > 0} onApply={handleApplyTemplate} />
 
-      <CustomDishBuilder draft={draft} onToggle={handleToggle} onAdd={handleAdd} />
+      <CustomDishBuilder
+        draft={draft}
+        customItems={customIngredients.items}
+        onToggle={handleToggle}
+        onAdd={handleAdd}
+        onAddCustom={customIngredients.add}
+        onRemoveCustom={customIngredients.remove}
+      />
 
       <SaveDishPanel
         sectionRef={saveSectionRef}

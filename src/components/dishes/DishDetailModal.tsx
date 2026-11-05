@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
-import { Check, Clock, Plus, Save, Trash2, X } from "lucide-react";
+import { useId, useRef, useState, type ChangeEvent } from "react";
+import { Check, Clock, ImagePlus, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Dish, IngredientGroup } from "@/types/dish";
 import { cn } from "@/lib/utils";
+import { DISH_IMAGE_ACCEPT, uploadDishImage } from "@/lib/dishImages";
 import { DishImage } from "@/components/dishes/DishImage";
 import {
   DETAIL_PILLARS,
@@ -152,6 +153,9 @@ function DishDetailBody({
   const [activeVariations, setActiveVariations] = useState<string[]>(initialActiveVariations ?? []);
   const [nameError, setNameError] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const current = editMode ? draft : dish;
   const variations = current.variations ?? [];
@@ -159,6 +163,27 @@ function DishDetailBody({
   /* Edit-mode handlers (the draft is only ever replaced, never mutated) */
 
   const updateDraft = (patch: Partial<Dish>) => setDraft((previous) => ({ ...previous, ...patch }));
+
+  const handlePhotoFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset the input so choosing the same file again still fires onChange.
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+    uploadDishImage(file)
+      .then((url) => {
+        updateDraft({ imageUrl: url });
+        setImageError(false);
+      })
+      .catch((error: unknown) => {
+        setUploadError(
+          error instanceof Error ? error.message : "De foto kon niet worden geüpload.",
+        );
+      })
+      .finally(() => setUploading(false));
+  };
 
   const addIngredient = (group: IngredientGroup, rawName: string) => {
     const name = normalizeName(rawName);
@@ -201,6 +226,7 @@ function DishDetailBody({
     }));
 
   const handleSave = () => {
+    if (uploading) return;
     const name = normalizeName(draft.name);
     const rawImage = (draft.imageUrl ?? "").trim();
     const imageUrl = safeImageUrl(rawImage);
@@ -282,16 +308,44 @@ function DishDetailBody({
               </Field>
               <Field
                 label="Foto-link"
-                error={imageError ? "Geef een geldige link die met http of https begint." : undefined}
+                error={
+                  imageError
+                    ? "Geef een geldige link die met http of https begint."
+                    : (uploadError ?? undefined)
+                }
               >
-                <input
-                  type="url"
-                  value={draft.imageUrl ?? ""}
-                  onChange={(event) => updateDraft({ imageUrl: event.target.value })}
-                  aria-invalid={imageError}
-                  placeholder="https://"
-                  className={neoWell}
-                />
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="url"
+                    value={draft.imageUrl ?? ""}
+                    onChange={(event) => updateDraft({ imageUrl: event.target.value })}
+                    aria-invalid={imageError}
+                    placeholder="https://"
+                    className={neoWell}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className={neoButton}
+                  >
+                    {uploading ? (
+                      <Loader2 aria-hidden className="size-4 animate-spin" />
+                    ) : (
+                      <ImagePlus aria-hidden className="size-4" />
+                    )}
+                    {uploading ? "Uploaden…" : "Foto uploaden"}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={DISH_IMAGE_ACCEPT}
+                    onChange={handlePhotoFile}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden
+                  />
+                </div>
               </Field>
               <Field label="Notities" className="sm:col-span-2">
                 <textarea

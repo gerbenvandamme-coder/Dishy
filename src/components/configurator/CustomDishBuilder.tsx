@@ -8,6 +8,7 @@ import { neoIconButton, neoSection, neoToggle, neoWell } from "@/components/dish
 import { PILLAR_BY_GROUP, normalizeName, sameName } from "@/components/dishes/dishHelpers";
 import { hasItem, type Draft } from "@/components/configurator/draft";
 import { BUILDER_PILLARS, type BuilderPillar } from "@/components/configurator/builderCatalog";
+import type { CustomIngredient, NewCustomIngredient } from "@/types/customIngredient";
 
 const MAX_INGREDIENT_LENGTH = 60;
 
@@ -18,15 +19,31 @@ function capitalize(value: string): string {
 interface PillarCardProps {
   pillar: BuilderPillar;
   draft: Draft;
+  /** Shared, user-added ingredients. Only the ones for this pillar are shown. */
+  customItems: readonly CustomIngredient[];
   onToggle: (group: IngredientGroup, name: string) => void;
   onAdd: (group: IngredientGroup, name: string) => void;
+  onAddCustom: (input: NewCustomIngredient) => void;
+  onRemoveCustom: (id: string) => void;
 }
 
-function PillarCard({ pillar, draft, onToggle, onAdd }: PillarCardProps) {
+function PillarCard({
+  pillar,
+  draft,
+  customItems,
+  onToggle,
+  onAdd,
+  onAddCustom,
+  onRemoveCustom,
+}: PillarCardProps) {
   const groups = Array.from(new Set(pillar.sections.map((section) => section.group)));
   const [value, setValue] = useState("");
   const [targetGroup, setTargetGroup] = useState<IngredientGroup>(groups[0]);
   const headingId = `builder-${pillar.id}`;
+
+  const pillarCustom = customItems.filter((item) => item.pillarId === pillar.id);
+  const customFor = (sectionLabel: string) =>
+    pillarCustom.filter((item) => item.section === sectionLabel);
 
   // Selected ingredients of this pillar that are not in the catalog (typed by the user or set by a template).
   const others = groups.flatMap((group) =>
@@ -35,7 +52,9 @@ function PillarCard({ pillar, draft, onToggle, onAdd }: PillarCardProps) {
         (item) =>
           !pillar.sections.some(
             (section) =>
-              section.group === group && section.options.some((option) => sameName(option, item)),
+              section.group === group &&
+              (section.options.some((option) => sameName(option, item)) ||
+                customFor(section.label).some((custom) => sameName(custom.name, item))),
           ),
       )
       .map((name) => ({ group, name })),
@@ -45,7 +64,14 @@ function PillarCard({ pillar, draft, onToggle, onAdd }: PillarCardProps) {
     event.preventDefault();
     const name = normalizeName(value);
     if (!name) return;
-    onAdd(targetGroup, capitalize(name));
+    const clean = capitalize(name);
+    onAdd(targetGroup, clean);
+
+    // Remember it for everyone, unless the catalog already offers it in that subcategory.
+    const section = pillar.sections.find((candidate) => candidate.group === targetGroup);
+    if (section && !section.options.some((option) => sameName(option, clean))) {
+      onAddCustom({ pillarId: pillar.id, section: section.label, group: targetGroup, name: clean });
+    }
     setValue("");
   };
 
@@ -77,6 +103,30 @@ function PillarCard({ pillar, draft, onToggle, onAdd }: PillarCardProps) {
                   {pressed && <Check className="size-4" aria-hidden />}
                   {option}
                 </button>
+              );
+            })}
+            {customFor(section.label).map((custom) => {
+              const pressed = hasItem(draft, section.group, custom.name);
+              return (
+                <span key={custom.id} className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => onToggle(section.group, custom.name)}
+                    className={neoToggle(pressed, "sm")}
+                  >
+                    {pressed && <Check className="size-4" aria-hidden />}
+                    {custom.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`${custom.name} uit de lijst verwijderen`}
+                    onClick={() => onRemoveCustom(custom.id)}
+                    className={neoIconButton}
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                </span>
               );
             })}
           </div>
@@ -144,12 +194,22 @@ function PillarCard({ pillar, draft, onToggle, onAdd }: PillarCardProps) {
 
 interface CustomDishBuilderProps {
   draft: Draft;
+  customItems: readonly CustomIngredient[];
   onToggle: (group: IngredientGroup, name: string) => void;
   onAdd: (group: IngredientGroup, name: string) => void;
+  onAddCustom: (input: NewCustomIngredient) => void;
+  onRemoveCustom: (id: string) => void;
 }
 
 /** Free-form builder: pick or type ingredients under the four pillars. */
-export function CustomDishBuilder({ draft, onToggle, onAdd }: CustomDishBuilderProps) {
+export function CustomDishBuilder({
+  draft,
+  customItems,
+  onToggle,
+  onAdd,
+  onAddCustom,
+  onRemoveCustom,
+}: CustomDishBuilderProps) {
   return (
     <section aria-labelledby="builder-heading" className="tactile-raised rounded-3xl p-4 sm:p-6">
       <div className="mb-5">
@@ -166,8 +226,11 @@ export function CustomDishBuilder({ draft, onToggle, onAdd }: CustomDishBuilderP
             key={pillar.id}
             pillar={pillar}
             draft={draft}
+            customItems={customItems}
             onToggle={onToggle}
             onAdd={onAdd}
+            onAddCustom={onAddCustom}
+            onRemoveCustom={onRemoveCustom}
           />
         ))}
       </div>

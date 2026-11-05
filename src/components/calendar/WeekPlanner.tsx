@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { ShoppingCart } from "lucide-react";
 import type { Dish, WeeklyMealPlan } from "@/types/dish";
 import { deleteMealPlanEntry, getMealPlan, saveMealPlan } from "@/lib/supabase";
+import { subscribeToMealPlan } from "@/lib/realtime";
 import { useApp } from "@/components/app/AppProvider";
 import { DishDetailModal } from "@/components/dishes/DishDetailModal";
 import { pillInset, sageButton } from "@/components/dishes/neo";
@@ -73,6 +74,17 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
   const [modal, setModal] = useState<ModalState | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
+  // Changes from other family members. Our own writes echo back and replace the entry with the same data.
+  useEffect(() => {
+    return subscribeToMealPlan({
+      onUpsert: (entry) => setPlan((previous) => upsertEntry(previous, entry)),
+      onDelete: (date) => setPlan((previous) => previous.filter((entry) => entry.date !== date)),
+      onResync: () => {
+        getMealPlan().then(setPlan).catch(warn("[planner] Could not refresh the meal plan."));
+      },
+    });
+  }, []);
+
   const weekStart = startOfWeek(addDays(todayKey, weekOffset * 7));
   const days = getWeekDays(weekStart);
   const dishById = new Map(dishes.map((dish) => [dish.id, dish] as const));
@@ -94,9 +106,23 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
 
   /* Plan changes */
 
+  const isUnchanged = (entry: WeeklyMealPlan) => {
+    const before = entryByDate.get(entry.date);
+    return (
+      before !== undefined &&
+      before.dayOfWeek === entry.dayOfWeek &&
+      before.dishId === entry.dishId &&
+      before.customNotes === entry.customNotes &&
+      (before.activeVariations ?? []).join("\u0000") === (entry.activeVariations ?? []).join("\u0000")
+    );
+  };
+
   const commitPlan = (next: WeeklyMealPlan[], removedDates: string[] = []) => {
     setPlan(next);
-    saveMealPlan(next).catch(warn("[planner] Could not save the meal plan."));
+    // Only the changed days are written, so a stale local plan never overwrites another member's days.
+    saveMealPlan(next, next.filter((entry) => !isUnchanged(entry))).catch(
+      warn("[planner] Could not save the meal plan."),
+    );
     removedDates.forEach((date) => {
       deleteMealPlanEntry(date).catch(warn("[planner] Could not delete the meal plan entry."));
     });

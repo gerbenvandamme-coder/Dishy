@@ -4,7 +4,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useRouter } from "next/navigation";
 import type { Dish } from "@/types/dish";
 import { cn } from "@/lib/utils";
-import { deleteDish, getDishes, saveDishes } from "@/lib/supabase";
+import { deleteDish, getDishes, saveDish } from "@/lib/supabase";
+import { subscribeToDishes } from "@/lib/realtime";
 import { mockDishes } from "@/lib/mockDishes";
 import {
   Dialog,
@@ -31,6 +32,13 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+/** Replaces the dish with the same id, or appends it when it is new. */
+function mergeDish(list: Dish[], dish: Dish): Dish[] {
+  return list.some((existing) => existing.id === dish.id)
+    ? list.map((existing) => (existing.id === dish.id ? dish : existing))
+    : [...list, dish];
+}
 
 export function useApp(): AppContextValue {
   const context = useContext(AppContext);
@@ -66,21 +74,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const commit = (next: Dish[]) => {
-    setDishes(next);
-    saveDishes(next).catch((error: unknown) => {
-      console.warn("[dishes] Could not save dishes.", error);
+  // Changes from other family members. Our own writes echo back and replace the dish with the same data.
+  useEffect(() => {
+    return subscribeToDishes({
+      onUpsert: (dish) => setDishes((previous) => (previous ? mergeDish(previous, dish) : previous)),
+      onDelete: (id) =>
+        setDishes((previous) => (previous ? previous.filter((dish) => dish.id !== id) : previous)),
+      onResync: () => {
+        getDishes()
+          .then(setDishes)
+          .catch((error: unknown) => {
+            console.warn("[dishes] Could not refresh the dishes.", error);
+          });
+      },
     });
-  };
+  }, []);
 
   const upsertDish = (dish: Dish) => {
     if (!dishes) return;
-    const exists = dishes.some((existing) => existing.id === dish.id);
-    commit(
-      exists
-        ? dishes.map((existing) => (existing.id === dish.id ? dish : existing))
-        : [...dishes, dish],
-    );
+    setDishes((previous) => (previous ? mergeDish(previous, dish) : previous));
+    saveDish(dish).catch((error: unknown) => {
+      console.warn("[dishes] Could not save the dish.", error);
+    });
   };
 
   const requestDelete = (dish: Dish) => {
@@ -89,9 +104,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const confirmDelete = () => {
-    if (!deleteTarget || !dishes) return;
+    if (!deleteTarget) return;
     const { id } = deleteTarget;
-    commit(dishes.filter((dish) => dish.id !== id));
+    setDishes((previous) => (previous ? previous.filter((dish) => dish.id !== id) : previous));
     deleteDish(id).catch((error: unknown) => {
       console.warn("[dishes] Could not delete dish.", error);
     });

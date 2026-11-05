@@ -6,8 +6,8 @@ import { mockDishes } from "@/lib/mockDishes";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const DISHES_TABLE = "dishes";
-const MEAL_PLAN_TABLE = "weekly_meal_plan";
+export const DISHES_TABLE = "dishes";
+export const MEAL_PLAN_TABLE = "weekly_meal_plan";
 
 const DISHES_STORAGE_KEY = "dishy:dishes";
 const MEAL_PLAN_STORAGE_KEY = "dishy:meal-plan";
@@ -97,10 +97,49 @@ export async function saveDishes(dishes: Dish[]): Promise<void> {
 }
 
 /**
- * Removes one dish from Supabase when it is configured.
- * localStorage is updated by saveDishes, so call both when deleting.
+ * A dish as a database row. Optional fields become explicit nulls: a single-row upsert leaves
+ * columns that are missing from the payload untouched, so a removed photo would otherwise stay.
  */
+function dishToRow(dish: Dish) {
+  return {
+    id: dish.id,
+    name: dish.name,
+    imageUrl: dish.imageUrl ?? null,
+    prepTime: dish.prepTime ?? null,
+    category: dish.category,
+    ingredients: dish.ingredients,
+    variations: dish.variations ?? null,
+    notes: dish.notes ?? null,
+  };
+}
+
+/**
+ * Saves one dish to localStorage first, then upserts only that row.
+ * Writing one row instead of the whole list means a stale local copy never overwrites
+ * what another family member changed, and only this dish produces a realtime event.
+ */
+export async function saveDish(dish: Dish): Promise<void> {
+  const local = readLocal<Dish>(DISHES_STORAGE_KEY) ?? [];
+  const exists = local.some((existing) => existing.id === dish.id);
+  writeLocal(
+    DISHES_STORAGE_KEY,
+    exists ? local.map((existing) => (existing.id === dish.id ? dish : existing)) : [...local, dish],
+  );
+  if (!supabase) return;
+
+  const { error } = await supabase.from(DISHES_TABLE).upsert(dishToRow(dish), { onConflict: "id" });
+  if (error) {
+    console.warn("[supabase] Could not sync dish, kept in localStorage.", error.message);
+  }
+}
+
+/** Removes one dish from localStorage and, when configured, from Supabase. */
 export async function deleteDish(id: string): Promise<void> {
+  const local = readLocal<Dish>(DISHES_STORAGE_KEY) ?? [];
+  writeLocal(
+    DISHES_STORAGE_KEY,
+    local.filter((existing) => existing.id !== id),
+  );
   if (!supabase) return;
 
   const { error } = await supabase.from(DISHES_TABLE).delete().eq("id", id);
@@ -129,12 +168,31 @@ export async function getMealPlan(): Promise<WeeklyMealPlan[]> {
   return readLocal<WeeklyMealPlan>(MEAL_PLAN_STORAGE_KEY) ?? [];
 }
 
-/** Saves the meal plan to localStorage first, then syncs to Supabase when configured. */
-export async function saveMealPlan(plan: WeeklyMealPlan[]): Promise<void> {
-  writeLocal(MEAL_PLAN_STORAGE_KEY, plan);
-  if (!supabase) return;
+/** A plan entry as a database row, with explicit nulls for the same reason as dishToRow. */
+function planEntryToRow(entry: WeeklyMealPlan) {
+  return {
+    date: entry.date,
+    dayOfWeek: entry.dayOfWeek,
+    dishId: entry.dishId ?? null,
+    customNotes: entry.customNotes ?? null,
+    activeVariations: entry.activeVariations ?? null,
+  };
+}
 
-  const { error } = await supabase.from(MEAL_PLAN_TABLE).upsert(plan, { onConflict: "date" });
+/**
+ * Saves the whole plan to localStorage first, then upserts the entries in `changed`
+ * (all of them by default). Pass only the entries that changed, so other members' days are not rewritten.
+ */
+export async function saveMealPlan(
+  plan: WeeklyMealPlan[],
+  changed: WeeklyMealPlan[] = plan,
+): Promise<void> {
+  writeLocal(MEAL_PLAN_STORAGE_KEY, plan);
+  if (!supabase || changed.length === 0) return;
+
+  const { error } = await supabase
+    .from(MEAL_PLAN_TABLE)
+    .upsert(changed.map(planEntryToRow), { onConflict: "date" });
   if (error) {
     console.warn("[supabase] Could not sync meal plan, kept in localStorage.", error.message);
   }

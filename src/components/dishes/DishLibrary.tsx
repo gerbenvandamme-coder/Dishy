@@ -6,10 +6,13 @@ import type { Dish } from "@/types/dish";
 import { useApp } from "@/components/app/AppProvider";
 import { CollapsibleSearch, searchSiblingClass } from "@/components/dishes/CollapsibleSearch";
 import { DishCard } from "@/components/dishes/DishCard";
+import { DishRow } from "@/components/dishes/DishRow";
 import { DishDetailModal } from "@/components/dishes/DishDetailModal";
 import { createId } from "@/components/dishes/dishHelpers";
 import { dishMatchesTerms, parseSearchTerms } from "@/components/dishes/dishSearch";
 import { neoButton, sageButton } from "@/components/dishes/neo";
+import { ViewToggle } from "@/components/dishes/ViewToggle";
+import { useDishView } from "@/components/dishes/useDishView";
 
 function createBlankDish(): Dish {
   return {
@@ -30,11 +33,17 @@ export function DishLibrary() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [view, setView] = useDishView();
 
   const terms = useMemo(() => parseSearchTerms(query), [query]);
   const visible = useMemo(
     () => (dishes ?? []).filter((dish) => dishMatchesTerms(dish, terms)),
     [dishes, terms],
+  );
+  const sortedVisible = useMemo(
+    () =>
+      [...visible].sort((a, b) => a.name.localeCompare(b.name, "nl", { sensitivity: "base" })),
+    [visible],
   );
 
   const openDish = (dish: Dish) => {
@@ -85,6 +94,7 @@ export function DishLibrary() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-3 sm:order-3">
+          <ViewToggle view={view} onChange={setView} />
           <button type="button" onClick={openConfigurator} className={`${neoButton} h-11`}>
             <ChefHat className="size-4" aria-hidden />
             Stel een gerecht samen
@@ -127,6 +137,20 @@ export function DishLibrary() {
             Zoekopdracht wissen
           </button>
         </p>
+      ) : view === "list" ? (
+        <ul className="flex flex-col gap-3">
+          {sortedVisible.map((dish) => (
+            <li key={dish.id}>
+              <DishRow
+                dish={dish}
+                editMode={editMode}
+                onOpen={openDish}
+                onEdit={openDish}
+                onDelete={requestDelete}
+              />
+            </li>
+          ))}
+        </ul>
       ) : (
         <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((dish) => (

@@ -1,4 +1,5 @@
 import type { Dish, Ingredient, IngredientGroup } from "@/types/dish";
+import { CURATED_DISH_IMAGE_URLS } from "./curatedDishImages";
 
 /**
  * Seed data: 40 Belgian family dishes.
@@ -64,6 +65,7 @@ function buildDish(spec: DishSpec): Dish {
   return {
     id: spec.id,
     name: spec.name,
+    imageUrl: CURATED_DISH_IMAGE_URLS[spec.id],
     category: "vaste_gerechten",
     ingredients,
     ...(variations.length > 0 ? { variations } : {}),

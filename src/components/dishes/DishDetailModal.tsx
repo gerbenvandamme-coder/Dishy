@@ -29,6 +29,7 @@ import {
   neoWell,
   pillInset,
   pillRaised,
+  PILLAR_STYLE,
   sageButton,
 } from "@/components/dishes/neo";
 
@@ -388,10 +389,13 @@ function DishDetailBody({
             <section
               key={pillar.group}
               aria-labelledby={headingId}
-              className={cn(neoSection, "flex flex-col gap-3")}
+              className={cn(neoSection, PILLAR_STYLE[pillar.group].panel, "flex flex-col gap-3")}
             >
               <div>
-                <h3 id={headingId} className="text-sm font-semibold">
+                <h3
+                  id={headingId}
+                  className={cn("text-sm font-bold", PILLAR_STYLE[pillar.group].text)}
+                >
                   {pillar.title}
                 </h3>
                 <p className="text-xs text-muted-foreground">{pillar.hint}</p>

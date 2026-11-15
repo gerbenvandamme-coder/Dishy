@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Clock, History as HistoryIcon } from "lucide-react";
+import { Check, ChefHat, Clock, History as HistoryIcon } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -19,7 +19,7 @@ import {
   matchedIngredientNames,
   parseSearchTerms,
 } from "@/components/dishes/dishSearch";
-import { neoToggle } from "@/components/dishes/neo";
+import { neoButton, neoToggle } from "@/components/dishes/neo";
 import { buildDishHistory, type DishHistory } from "@/components/calendar/dishHistory";
 import {
   dayNameOf,
@@ -126,6 +126,21 @@ function PickerBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      {targetDate && (
+        <Link
+          href={`/configurator?dag=${targetDate}`}
+          className={cn(neoButton, "w-full justify-start gap-3 py-3 text-left")}
+        >
+          <ChefHat className="size-5 shrink-0 text-sage-ink" aria-hidden />
+          <span className="flex min-w-0 flex-col">
+            <span className="font-semibold">Eenmalig gerecht samenstellen</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              Bouw iets voor deze dag. Het komt niet in je gerechtenbibliotheek.
+            </span>
+          </span>
+        </Link>
+      )}
+
       {dishes.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Je hebt nog geen gerechten.{" "}

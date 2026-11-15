@@ -65,7 +65,8 @@ export function buildShoppingList(entries: WeeklyMealPlan[], dishes: Dish[]): Sh
   const buckets = new Map<DepartmentId, Map<string, ShoppingItem>>();
 
   for (const entry of entries) {
-    const dish = entry.dishId ? dishById.get(entry.dishId) : undefined;
+    // A one-off dish for that day wins over a library dish.
+    const dish = entry.oneOffDish ?? (entry.dishId ? dishById.get(entry.dishId) : undefined);
     if (!dish) continue;
     const activeVariations = entry.activeVariations ?? [];
 

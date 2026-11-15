@@ -10,7 +10,7 @@ import { DishRow } from "@/components/dishes/DishRow";
 import { DishDetailModal } from "@/components/dishes/DishDetailModal";
 import { createId } from "@/components/dishes/dishHelpers";
 import { dishMatchesTerms, parseSearchTerms } from "@/components/dishes/dishSearch";
-import { neoButton, sageButton } from "@/components/dishes/neo";
+import { neoButton } from "@/components/dishes/neo";
 import { ViewToggle } from "@/components/dishes/ViewToggle";
 import { useDishView } from "@/components/dishes/useDishView";
 

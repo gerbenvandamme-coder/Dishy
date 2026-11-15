@@ -1,9 +1,10 @@
 "use client";
 
 import { useId, type FormEvent, type RefObject } from "react";
-import { RotateCcw, Save } from "lucide-react";
+import { CalendarPlus, Library, Loader2, RotateCcw } from "lucide-react";
 import type { Dish } from "@/types/dish";
-import { neoButton, neoWell, pillRaised } from "@/components/dishes/neo";
+import { cn } from "@/lib/utils";
+import { neoButton, neoWell, pillarPill } from "@/components/dishes/neo";
 import { DETAIL_PILLARS, createId, normalizeName } from "@/components/dishes/dishHelpers";
 import { countItems, draftToIngredients, type Draft } from "@/components/configurator/draft";
 import { primaryButton } from "@/components/configurator/styles";
@@ -17,14 +18,28 @@ interface SaveDishPanelProps {
   prepTime: string;
   /** False while the dish library is still loading, because saving needs it. */
   ready: boolean;
+  /** The day for the weekmenu, as a "YYYY-MM-DD" key. Empty while it is not known yet. */
+  weekDate: string;
+  /** For example "Woensdag 18 nov.". Empty when the date is not valid. */
+  weekDateLabel: string;
+  /** Name of the dish that is already planned on that day and would be replaced. */
+  replacesDishName?: string;
+  /** The user came from a day in the weekplanner, so adding to the week is the main action. */
+  fromPlanner: boolean;
+  /** True while the dish is being put on the weekmenu. */
+  addingToWeek: boolean;
   onNameChange: (name: string) => void;
   onResetName: () => void;
   onPrepTimeChange: (prepTime: string) => void;
+  onWeekDateChange: (date: string) => void;
   onClear: () => void;
+  /** Saves the dish in the library. */
   onSave: (dish: Dish) => void;
+  /** Puts the dish on the weekmenu for one day. The library stays untouched. */
+  onAddToWeek: (dish: Dish, date: string) => void;
 }
 
-/** Summary of the composed dish, an editable title and the save button. */
+/** Summary of the composed dish, an editable title, and the two ways to keep it. */
 export function SaveDishPanel({
   sectionRef,
   draft,
@@ -32,16 +47,26 @@ export function SaveDishPanel({
   nameIsCustom,
   prepTime,
   ready,
+  weekDate,
+  weekDateLabel,
+  replacesDishName,
+  fromPlanner,
+  addingToWeek,
   onNameChange,
   onResetName,
   onPrepTimeChange,
+  onWeekDateChange,
   onClear,
   onSave,
+  onAddToWeek,
 }: SaveDishPanelProps) {
   const hintId = useId();
+  const dateId = useId();
   const selectedCount = countItems(draft);
   const hasName = normalizeName(name).length > 0;
-  const canSave = ready && selectedCount > 0 && hasName;
+  const hasDraft = selectedCount > 0 && hasName;
+  const canSave = ready && hasDraft;
+  const canAddToWeek = hasDraft && weekDateLabel.length > 0 && !addingToWeek;
 
   let blockedReason = "";
   if (selectedCount === 0) blockedReason = "Kies eerst minstens één ingrediënt.";
@@ -50,17 +75,92 @@ export function SaveDishPanel({
 
   const summary = DETAIL_PILLARS.filter((pillar) => draft[pillar.group].length > 0);
 
+  const buildDish = (idPrefix: string): Dish => ({
+    id: createId(idPrefix),
+    name: normalizeName(name),
+    prepTime: normalizeName(prepTime) || undefined,
+    category: "geconfigureerd",
+    ingredients: draftToIngredients(draft),
+  });
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSave) return;
-    onSave({
-      id: createId("dish"),
-      name: normalizeName(name),
-      prepTime: normalizeName(prepTime) || undefined,
-      category: "geconfigureerd",
-      ingredients: draftToIngredients(draft),
-    });
+    onSave(buildDish("dish"));
   };
+
+  const handleAddToWeek = () => {
+    if (!canAddToWeek) return;
+    onAddToWeek(buildDish("eenmalig"), weekDate);
+  };
+
+  const weekBlock = (
+    <div
+      className={cn(
+        "flex flex-col gap-3 rounded-2xl p-4 tactile-sunken",
+        fromPlanner && "order-first ring-2 ring-sage/60",
+      )}
+    >
+      <div>
+        <h3 className="font-display text-base font-extrabold">Eenmalig op het weekmenu</h3>
+        <p className="text-sm text-muted-foreground">
+          Zet het gerecht op één dag. Het komt <strong>niet</strong> in je bibliotheek.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={dateId} className="text-sm font-medium">
+          Op welke dag?
+        </label>
+        <input
+          id={dateId}
+          type="date"
+          value={weekDate}
+          onChange={(event) => onWeekDateChange(event.target.value)}
+          className={neoWell}
+        />
+        {weekDateLabel && <p className="text-xs text-muted-foreground">{weekDateLabel}</p>}
+        {replacesDishName && (
+          <p role="status" className="text-xs font-medium text-pillar-saus">
+            Let op: {replacesDishName} staat al op die dag en wordt vervangen.
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={handleAddToWeek}
+        disabled={!canAddToWeek}
+        aria-describedby={blockedReason ? hintId : undefined}
+        className={fromPlanner ? primaryButton : cn(neoButton, "w-full py-3")}
+      >
+        {addingToWeek ? (
+          <Loader2 className="size-5 animate-spin" aria-hidden />
+        ) : (
+          <CalendarPlus className="size-5" aria-hidden />
+        )}
+        Zet op weekmenu
+      </button>
+    </div>
+  );
+
+  const libraryBlock = (
+    <div className="flex flex-col gap-3 rounded-2xl p-4 tactile-sunken">
+      <div>
+        <h3 className="font-display text-base font-extrabold">In je bibliotheek</h3>
+        <p className="text-sm text-muted-foreground">
+          Bewaar het gerecht om het later opnieuw te kiezen op elke dag.
+        </p>
+      </div>
+      <button
+        type="submit"
+        disabled={!canSave}
+        aria-describedby={blockedReason ? hintId : undefined}
+        className={fromPlanner ? cn(neoButton, "mt-auto w-full py-3") : cn(primaryButton, "mt-auto sm:w-full")}
+      >
+        <Library className="size-5" aria-hidden />
+        Opslaan in bibliotheek
+      </button>
+    </div>
+  );
 
   return (
     <section
@@ -76,7 +176,7 @@ export function SaveDishPanel({
               Jouw gerecht
             </h2>
             <p className="text-sm text-muted-foreground">
-              Controleer de titel en bewaar het gerecht in je bibliotheek.
+              Controleer de titel en kies wat je ermee wilt doen.
             </p>
           </div>
           <button type="button" onClick={onClear} disabled={selectedCount === 0} className={neoButton}>
@@ -90,9 +190,9 @@ export function SaveDishPanel({
         ) : (
           <dl className="flex flex-wrap gap-2">
             {summary.map((pillar) => (
-              <div key={pillar.group} className={pillRaised}>
-                <dt className="text-muted-foreground">{pillar.badge}:</dt>
-                <dd>{draft[pillar.group].join(", ")}</dd>
+              <div key={pillar.group} className={pillarPill(pillar.group)}>
+                <dt className="font-bold">{pillar.badge}:</dt>
+                <dd className="font-medium">{draft[pillar.group].join(", ")}</dd>
               </div>
             ))}
           </dl>
@@ -136,22 +236,16 @@ export function SaveDishPanel({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 sm:items-end">
-          <button
-            type="submit"
-            disabled={!canSave}
-            aria-describedby={blockedReason ? hintId : undefined}
-            className={primaryButton}
-          >
-            <Save className="size-5" aria-hidden />
-            Gerecht Opslaan in Bibliotheek
-          </button>
-          {blockedReason && (
-            <p id={hintId} className="text-sm text-muted-foreground">
-              {blockedReason}
-            </p>
-          )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {weekBlock}
+          {libraryBlock}
         </div>
+
+        {blockedReason && (
+          <p id={hintId} className="text-sm text-muted-foreground">
+            {blockedReason}
+          </p>
+        )}
       </form>
     </section>
   );

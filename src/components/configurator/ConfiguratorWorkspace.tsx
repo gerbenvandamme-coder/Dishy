@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import type { Dish, IngredientGroup } from "@/types/dish";
+import type { Dish, IngredientGroup, WeeklyMealPlan } from "@/types/dish";
+import { getMealPlan, saveMealPlan } from "@/lib/supabase";
 import { useApp } from "@/components/app/AppProvider";
+import { dayNameOf, formatShortDate, fromDateKey, toDateKey } from "@/components/calendar/weekUtils";
 import {
   EMPTY_DRAFT,
   addItem,
@@ -20,6 +22,24 @@ import { useCustomIngredients } from "@/components/configurator/useCustomIngredi
 /** Where the user lands after saving a dish. */
 const AFTER_SAVE_PATH = "/gerechten";
 
+/* The URL and today's date only exist in the browser. The server snapshot is empty, so the
+   static HTML never contains them and hydration cannot mismatch. */
+const subscribeNoop = () => () => {};
+const getSearch = (): string => window.location.search;
+const getTodayKey = (): string => toDateKey(new Date());
+const getServerValue = (): string => "";
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True for a real calendar date such as "2026-11-18". */
+function isValidDateKey(key: string): boolean {
+  return DATE_KEY_PATTERN.test(key) && toDateKey(fromDateKey(key)) === key;
+}
+
+function describeDay(key: string): string {
+  return isValidDateKey(key) ? `${dayNameOf(key)} ${formatShortDate(key)}` : "";
+}
+
 /**
  * Owns the dish being composed. The template wizard and the free-form builder both
  * write to the same draft, and the save panel turns it into a library dish.
@@ -28,6 +48,16 @@ export function ConfiguratorWorkspace() {
   const router = useRouter();
   const { dishes, upsertDish } = useApp();
   const customIngredients = useCustomIngredients();
+
+  // "?dag=YYYY-MM-DD" is set by the weekplanner when the user wants a one-off dish for that day.
+  const search = useSyncExternalStore(subscribeNoop, getSearch, getServerValue);
+  const todayKey = useSyncExternalStore(subscribeNoop, getTodayKey, getServerValue);
+  const dayParam = new URLSearchParams(search).get("dag") ?? "";
+  const fromPlanner = isValidDateKey(dayParam);
+  const [chosenDate, setChosenDate] = useState<string | null>(null);
+  const weekDate = chosenDate ?? (fromPlanner ? dayParam : todayKey);
+  const [plan, setPlan] = useState<WeeklyMealPlan[]>([]);
+  const [addingToWeek, setAddingToWeek] = useState(false);
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [customName, setCustomName] = useState<string | null>(null);
@@ -70,6 +100,54 @@ export function ConfiguratorWorkspace() {
     router.push(AFTER_SAVE_PATH);
   };
 
+  // The plan is only read to warn about a day that already has a dish.
+  useEffect(() => {
+    let cancelled = false;
+    getMealPlan()
+      .then((loaded) => {
+        if (!cancelled) setPlan(loaded);
+      })
+      .catch((error: unknown) => {
+        console.warn("[configurator] Could not load the meal plan.", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const plannedEntry = plan.find((entry) => entry.date === weekDate);
+  const replacesDishName =
+    plannedEntry?.oneOffDish?.name ??
+    (plannedEntry?.dishId ? dishes?.find((dish) => dish.id === plannedEntry.dishId)?.name : undefined);
+
+  /** Puts the dish on one day of the weekmenu. It is stored in the plan, not in the library. */
+  const handleAddToWeek = (dish: Dish, date: string) => {
+    if (!isValidDateKey(date)) return;
+    setAddingToWeek(true);
+    getMealPlan()
+      .catch((error: unknown) => {
+        console.warn("[configurator] Could not load the meal plan.", error);
+        return [] as WeeklyMealPlan[];
+      })
+      .then((latest) => {
+        const entry: WeeklyMealPlan = {
+          date,
+          dayOfWeek: dayNameOf(date),
+          oneOffDish: dish,
+          activeVariations: [],
+        };
+        const next = latest.some((existing) => existing.date === date)
+          ? latest.map((existing) => (existing.date === date ? entry : existing))
+          : [...latest, entry];
+        return saveMealPlan(next, [entry]);
+      })
+      .then(() => router.push(`/?week=${date}`))
+      .catch((error: unknown) => {
+        console.warn("[configurator] Could not add the dish to the week.", error);
+        setAddingToWeek(false);
+      });
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
       <header className="flex flex-col gap-2">
@@ -77,9 +155,18 @@ export function ConfiguratorWorkspace() {
           Stel een gerecht samen
         </h1>
         <p className="text-sm text-muted-foreground sm:text-base">
-          Start met een template of kies zelf je ingrediënten. Bewaar het resultaat daarna in je
-          bibliotheek.
+          Start met een template of kies zelf je ingrediënten. Bewaar het resultaat in je
+          bibliotheek, of zet het eenmalig op het weekmenu.
         </p>
+        {fromPlanner && (
+          <p
+            role="status"
+            className="rounded-2xl border border-sage-border bg-sage-tint px-4 py-3 text-sm font-medium text-foreground"
+          >
+            Je stelt een eenmalig gerecht samen voor <strong>{describeDay(dayParam)}</strong>. Het
+            komt niet in je bibliotheek, tenzij je dat zelf kiest.
+          </p>
+        )}
       </header>
 
       <TemplateWizard hasExistingDraft={countItems(draft) > 0} onApply={handleApplyTemplate} />
@@ -100,11 +187,18 @@ export function ConfiguratorWorkspace() {
         nameIsCustom={customName !== null}
         prepTime={prepTime}
         ready={dishes !== null}
+        weekDate={weekDate}
+        weekDateLabel={describeDay(weekDate)}
+        replacesDishName={replacesDishName}
+        fromPlanner={fromPlanner}
+        addingToWeek={addingToWeek}
         onNameChange={setCustomName}
         onResetName={() => setCustomName(null)}
         onPrepTimeChange={setPrepTime}
+        onWeekDateChange={setChosenDate}
         onClear={handleClear}
         onSave={handleSave}
+        onAddToWeek={handleAddToWeek}
       />
     </div>
   );

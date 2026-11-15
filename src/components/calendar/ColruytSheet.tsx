@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, RotateCcw } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -9,8 +9,21 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { neoButton, neoSection, pillInset } from "@/components/dishes/neo";
-import type { ShoppingDepartment, ShoppingItem } from "@/components/calendar/colruytList";
+import { PILLAR_STYLE, neoButton, neoIconButton, neoSection, pillInset } from "@/components/dishes/neo";
+import type { IngredientGroup } from "@/types/dish";
+import type {
+  DepartmentId,
+  ShoppingDepartment,
+  ShoppingItem,
+} from "@/components/calendar/colruytList";
+
+/** Each supermarket department borrows the accent of the pillar it mostly holds. */
+const DEPARTMENT_PILLAR: Record<DepartmentId, IngredientGroup> = {
+  vers: "eiwit",
+  groenten: "groenten",
+  droog: "basis",
+  sauzen: "saus",
+};
 
 interface ShoppingRowProps {
   item: ShoppingItem;
@@ -59,8 +72,14 @@ function ShoppingRow({ item, checked, onToggle }: ShoppingRowProps) {
 interface ColruytSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** For example "Week 45 · 2 nov. t/m 8 nov. 2026". */
-  weekLabel: string;
+  /** For example "Week 45". */
+  weekTitle: string;
+  /** For example "2 nov. t/m 8 nov. 2026". */
+  weekRange: string;
+  /** For example "Deze week". */
+  weekRelative: string;
+  /** Shows the list of the previous (-1) or next (+1) week. */
+  onWeekChange: (step: -1 | 1) => void;
   departments: ShoppingDepartment[];
   checked: ReadonlySet<string>;
   onToggle: (key: string) => void;
@@ -71,7 +90,10 @@ interface ColruytSheetProps {
 export function ColruytSheet({
   open,
   onOpenChange,
-  weekLabel,
+  weekTitle,
+  weekRange,
+  weekRelative,
+  onWeekChange,
   departments,
   checked,
   onToggle,
@@ -85,16 +107,43 @@ export function ColruytSheet({
       <SheetContent className="bg-(--tactile-bg)">
         <SheetHeader className="px-5 pt-5 pr-14">
           <SheetTitle className="text-xl font-semibold tracking-tight">
-            Ingrediënten voor Colruyt Xtra
+            Boodschappen voor Colruyt Xtra
           </SheetTitle>
-          <SheetDescription>{weekLabel}</SheetDescription>
+          <SheetDescription>
+            De lijst volgt de week die je bekijkt: {weekTitle.toLowerCase()}.
+          </SheetDescription>
         </SheetHeader>
+
+        <div className="mx-5 flex items-center justify-between gap-3 rounded-2xl bg-(--tactile-bg) p-2 tactile-sunken">
+          <button
+            type="button"
+            onClick={() => onWeekChange(-1)}
+            aria-label="Vorige week"
+            className={neoIconButton}
+          >
+            <ChevronLeft className="size-4" aria-hidden />
+          </button>
+          <div className="min-w-0 text-center" aria-live="polite">
+            <p className="font-display text-lg leading-tight font-extrabold">{weekTitle}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {weekRelative} · {weekRange}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onWeekChange(1)}
+            aria-label="Volgende week"
+            className={neoIconButton}
+          >
+            <ChevronRight className="size-4" aria-hidden />
+          </button>
+        </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-6">
           {allItems.length === 0 ? (
             <p className="rounded-2xl bg-(--tactile-bg) p-4 text-sm text-muted-foreground tactile-sunken">
-              Er staan nog geen gerechten in deze week. Plan eerst een gerecht in, dan verschijnen
-              de ingrediënten hier.
+              Er staan nog geen gerechten in {weekTitle.toLowerCase()}. Plan eerst een gerecht in,
+              dan verschijnen de ingrediënten hier.
             </p>
           ) : (
             <>
@@ -112,13 +161,14 @@ export function ColruytSheet({
 
               {departments.map((department) => {
                 const headingId = `colruyt-${department.id}`;
+                const accent = PILLAR_STYLE[DEPARTMENT_PILLAR[department.id]];
                 return (
                   <section
                     key={department.id}
                     aria-labelledby={headingId}
-                    className={cn(neoSection, "flex flex-col gap-3")}
+                    className={cn(neoSection, accent.panel, "flex flex-col gap-3")}
                   >
-                    <h3 id={headingId} className="text-sm font-semibold">
+                    <h3 id={headingId} className={cn("text-sm font-bold", accent.text)}>
                       {department.title}
                     </h3>
                     <ul className="flex flex-col gap-2.5">

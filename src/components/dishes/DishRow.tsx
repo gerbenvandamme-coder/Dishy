@@ -4,7 +4,7 @@ import { Clock, Pencil, Trash2 } from "lucide-react";
 import type { Dish } from "@/types/dish";
 import { cn } from "@/lib/utils";
 import { pillarsInDish } from "@/components/dishes/dishHelpers";
-import { neoIconButton, neoListRow, pillSage } from "@/components/dishes/neo";
+import { neoIconButton, neoListRow, pillarPill } from "@/components/dishes/neo";
 
 interface DishRowProps {
   dish: Dish;
@@ -32,13 +32,13 @@ export function DishRow({ dish, editMode, onOpen, onEdit, onDelete }: DishRowPro
         </span>
         <span className="flex flex-wrap items-center gap-2">
           {dish.prepTime && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-sage tabular-nums">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-sage-ink tabular-nums">
               <Clock className="size-3.5" aria-hidden />
               {dish.prepTime}
             </span>
           )}
           {pillars.map((pillar) => (
-            <span key={pillar.group} className={pillSage}>
+            <span key={pillar.group} className={pillarPill(pillar.group)}>
               {pillar.badge}
             </span>
           ))}

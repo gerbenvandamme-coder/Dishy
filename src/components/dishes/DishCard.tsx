@@ -5,7 +5,7 @@ import type { Dish } from "@/types/dish";
 import { cn } from "@/lib/utils";
 import { DishImage } from "@/components/dishes/DishImage";
 import { pillarsInDish } from "@/components/dishes/dishHelpers";
-import { neoCard, neoIconButton, pillInset, pillRaised } from "@/components/dishes/neo";
+import { neoCard, neoIconButton, pillInset, pillarPill } from "@/components/dishes/neo";
 
 interface DishCardProps {
   dish: Dish;
@@ -40,7 +40,7 @@ export function DishCard({ dish, editMode, onOpen, onEdit, onDelete }: DishCardP
               </span>
             )}
             {pillars.map((pillar) => (
-              <span key={pillar.group} className={pillRaised}>
+              <span key={pillar.group} className={pillarPill(pillar.group)}>
                 {pillar.badge}
               </span>
             ))}

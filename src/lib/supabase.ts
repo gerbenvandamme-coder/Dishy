@@ -169,15 +169,22 @@ export async function getMealPlan(): Promise<WeeklyMealPlan[]> {
 }
 
 /** A plan entry as a database row, with explicit nulls for the same reason as dishToRow. */
-function planEntryToRow(entry: WeeklyMealPlan) {
+function planEntryToRow(entry: WeeklyMealPlan, withOneOff: boolean) {
   return {
     date: entry.date,
     dayOfWeek: entry.dayOfWeek,
     dishId: entry.dishId ?? null,
     customNotes: entry.customNotes ?? null,
     activeVariations: entry.activeVariations ?? null,
+    ...(withOneOff ? { oneOffDish: entry.oneOffDish ?? null } : {}),
   };
 }
+
+/**
+ * Set once the database turns out to have no "oneOffDish" column (supabase/add_one_off_dish.sql
+ * has not been run yet). One-off dishes then stay on this device and everything else keeps syncing.
+ */
+let oneOffColumnMissing = false;
 
 /**
  * Saves the whole plan to localStorage first, then upserts the entries in `changed`
@@ -190,9 +197,23 @@ export async function saveMealPlan(
   writeLocal(MEAL_PLAN_STORAGE_KEY, plan);
   if (!supabase || changed.length === 0) return;
 
-  const { error } = await supabase
-    .from(MEAL_PLAN_TABLE)
-    .upsert(changed.map(planEntryToRow), { onConflict: "date" });
+  const client = supabase;
+  const upsert = (withOneOff: boolean) =>
+    client
+      .from(MEAL_PLAN_TABLE)
+      .upsert(
+        changed.map((entry) => planEntryToRow(entry, withOneOff)),
+        { onConflict: "date" },
+      );
+
+  let { error } = await upsert(!oneOffColumnMissing);
+  if (error && !oneOffColumnMissing && error.message.includes("oneOffDish")) {
+    oneOffColumnMissing = true;
+    console.warn(
+      "[supabase] The weekly_meal_plan table has no oneOffDish column yet. Run supabase/add_one_off_dish.sql. One-off dishes stay on this device until then.",
+    );
+    ({ error } = await upsert(false));
+  }
   if (error) {
     console.warn("[supabase] Could not sync meal plan, kept in localStorage.", error.message);
   }

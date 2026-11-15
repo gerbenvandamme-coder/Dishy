@@ -4,6 +4,8 @@
  * The neo-* utilities are defined in src/app/globals.css.
  */
 
+import type { IngredientGroup } from "@/types/dish";
+
 const SURFACE = "bg-(--tactile-bg)";
 const FOCUS =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
@@ -37,6 +39,58 @@ const TOGGLE_BASE = `${FOCUS} inline-flex cursor-pointer items-center gap-2 roun
 /** Soft debossed sage well for a selected toggle. */
 const TOGGLE_SELECTED =
   "bg-[#557A61]/15 text-[#35523E] dark:text-[#94B8A0] border border-[#557A61]/30 shadow-inner font-bold";
+
+/** "Vandaag" marker. White on the light sage, dark on the lighter dark-mode sage. */
+export const pillToday =
+  "inline-flex items-center rounded-full bg-sage px-2.5 py-0.5 text-xs font-bold text-white dark:text-[#0f1311]";
+
+/** Violet tag for a dish that was composed for one day only. */
+export const pillOneOff =
+  "inline-flex items-center gap-1.5 rounded-full border border-oneoff/30 bg-oneoff/15 px-3 py-1 text-xs font-semibold text-oneoff";
+
+/**
+ * One accent color per ingredient pillar, used for badges, section headings and shopping departments.
+ * Class names are written out in full so Tailwind can detect them.
+ */
+export const PILLAR_STYLE: Record<
+  IngredientGroup,
+  { pill: string; dot: string; text: string; panel: string }
+> = {
+  eiwit: {
+    pill: "border border-pillar-eiwit/30 bg-pillar-eiwit/15 text-pillar-eiwit",
+    dot: "bg-pillar-eiwit",
+    text: "text-pillar-eiwit",
+    panel: "border-l-4 border-l-pillar-eiwit",
+  },
+  basis: {
+    pill: "border border-pillar-basis/30 bg-pillar-basis/15 text-pillar-basis",
+    dot: "bg-pillar-basis",
+    text: "text-pillar-basis",
+    panel: "border-l-4 border-l-pillar-basis",
+  },
+  groenten: {
+    pill: "border border-pillar-groenten/30 bg-pillar-groenten/15 text-pillar-groenten",
+    dot: "bg-pillar-groenten",
+    text: "text-pillar-groenten",
+    panel: "border-l-4 border-l-pillar-groenten",
+  },
+  saus: {
+    pill: "border border-pillar-saus/30 bg-pillar-saus/15 text-pillar-saus",
+    dot: "bg-pillar-saus",
+    text: "text-pillar-saus",
+    panel: "border-l-4 border-l-pillar-saus",
+  },
+  extra: {
+    pill: "border border-pillar-extra/30 bg-pillar-extra/15 text-pillar-extra",
+    dot: "bg-pillar-extra",
+    text: "text-pillar-extra",
+    panel: "border-l-4 border-l-pillar-extra",
+  },
+};
+
+/** Colored badge for a pillar, for example "Eiwit" on a dish card. */
+export const pillarPill = (group: IngredientGroup): string =>
+  `inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${PILLAR_STYLE[group].pill}`;
 
 /** Sage-tinted pill token (accent badges). */
 export const pillSage = `inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${TOGGLE_SELECTED}`;

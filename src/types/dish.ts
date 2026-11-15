@@ -37,4 +37,9 @@ export interface WeeklyMealPlan {
   dishId?: string;
   customNotes?: string;
   activeVariations?: string[];
+  /**
+   * A dish for this day only. It lives inside the plan entry and is never added to the dish library.
+   * When set, it takes precedence over `dishId`.
+   */
+  oneOffDish?: Dish;
 }

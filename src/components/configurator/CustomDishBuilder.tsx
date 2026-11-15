@@ -4,13 +4,27 @@ import { useState, type FormEvent } from "react";
 import { Check, Plus, X } from "lucide-react";
 import type { IngredientGroup } from "@/types/dish";
 import { cn } from "@/lib/utils";
-import { neoIconButton, neoSection, neoToggle, neoWell } from "@/components/dishes/neo";
+import {
+  PILLAR_STYLE,
+  neoIconButton,
+  neoSection,
+  neoToggle,
+  neoWell,
+} from "@/components/dishes/neo";
 import { PILLAR_BY_GROUP, normalizeName, sameName } from "@/components/dishes/dishHelpers";
 import { hasItem, type Draft } from "@/components/configurator/draft";
-import { BUILDER_PILLARS, type BuilderPillar } from "@/components/configurator/builderCatalog";
+import {
+  BUILDER_PILLARS,
+  type BuilderPillar,
+  type BuilderSection,
+} from "@/components/configurator/builderCatalog";
 import type { CustomIngredient, NewCustomIngredient } from "@/types/customIngredient";
 
 const MAX_INGREDIENT_LENGTH = 60;
+const MAX_SECTION_LENGTH = 40;
+
+/** Value of the "new subtitle" entry in the subtitle picker. Cannot clash with a real label. */
+const NEW_SECTION = "__nieuw__";
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -37,20 +51,38 @@ function PillarCard({
   onRemoveCustom,
 }: PillarCardProps) {
   const groups = Array.from(new Set(pillar.sections.map((section) => section.group)));
+  const accent = PILLAR_STYLE[groups[0]];
   const [value, setValue] = useState("");
-  const [targetGroup, setTargetGroup] = useState<IngredientGroup>(groups[0]);
+  const [sectionKey, setSectionKey] = useState(pillar.sections[0].label);
+  const [newSection, setNewSection] = useState("");
+  const [newGroup, setNewGroup] = useState<IngredientGroup>(groups[0]);
   const headingId = `builder-${pillar.id}`;
 
   const pillarCustom = customItems.filter((item) => item.pillarId === pillar.id);
   const customFor = (sectionLabel: string) =>
     pillarCustom.filter((item) => item.section === sectionLabel);
 
+  // Subtitles someone created themselves: they only exist through their ingredients.
+  const ownSections: BuilderSection[] = [];
+  for (const item of pillarCustom) {
+    const known =
+      pillar.sections.some((section) => sameName(section.label, item.section)) ||
+      ownSections.some((section) => sameName(section.label, item.section));
+    if (!known) ownSections.push({ label: item.section, group: item.group, options: [] });
+  }
+  const allSections: readonly BuilderSection[] = [...pillar.sections, ...ownSections];
+
+  const addingToNew = sectionKey === NEW_SECTION;
+  const trimmedNewSection = capitalize(normalizeName(newSection));
+  const canAdd =
+    normalizeName(value).length > 0 && (!addingToNew || trimmedNewSection.length > 0);
+
   // Selected ingredients of this pillar that are not in the catalog (typed by the user or set by a template).
   const others = groups.flatMap((group) =>
     draft[group]
       .filter(
         (item) =>
-          !pillar.sections.some(
+          !allSections.some(
             (section) =>
               section.group === group &&
               (section.options.some((option) => sameName(option, item)) ||
@@ -62,80 +94,106 @@ function PillarCard({
 
   const handleAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const name = normalizeName(value);
-    if (!name) return;
-    const clean = capitalize(name);
-    onAdd(targetGroup, clean);
+    if (!canAdd) return;
+    const clean = capitalize(normalizeName(value));
 
-    // Remember it for everyone, unless the catalog already offers it in that subcategory.
-    const section = pillar.sections.find((candidate) => candidate.group === targetGroup);
-    if (section && !section.options.some((option) => sameName(option, clean))) {
-      onAddCustom({ pillarId: pillar.id, section: section.label, group: targetGroup, name: clean });
+    const chosen = addingToNew
+      ? undefined
+      : (allSections.find((section) => section.label === sectionKey) ?? allSections[0]);
+    const sectionLabel = chosen ? chosen.label : trimmedNewSection;
+    const group = chosen ? chosen.group : newGroup;
+
+    onAdd(group, clean);
+
+    // Remember it for everyone, unless the subtitle already offers it.
+    const alreadyListed =
+      (chosen?.options.some((option) => sameName(option, clean)) ?? false) ||
+      customFor(sectionLabel).some((custom) => sameName(custom.name, clean));
+    if (!alreadyListed) {
+      onAddCustom({ pillarId: pillar.id, section: sectionLabel, group, name: clean });
+    }
+
+    // After creating a new subtitle it becomes the selected one.
+    if (addingToNew) {
+      setSectionKey(sectionLabel);
+      setNewSection("");
     }
     setValue("");
   };
 
   return (
-    <section aria-labelledby={headingId} className={cn(neoSection, "flex flex-col gap-4")}>
+    <section aria-labelledby={headingId} className={cn(neoSection, accent.panel, "flex flex-col gap-4")}>
       <div>
-        <h3 id={headingId} className="font-display text-lg font-extrabold">
+        <h3 id={headingId} className={cn("font-display text-lg font-extrabold", accent.text)}>
           {pillar.title}
         </h3>
         <p className="text-xs text-muted-foreground">{pillar.hint}</p>
       </div>
 
-      {pillar.sections.map((section) => (
-        <div key={section.label} className="flex flex-col gap-2">
-          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            {section.label}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {section.options.map((option) => {
-              const pressed = hasItem(draft, section.group, option);
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={pressed}
-                  onClick={() => onToggle(section.group, option)}
-                  className={neoToggle(pressed, "sm")}
-                >
-                  {pressed && <Check className="size-4" aria-hidden />}
-                  {option}
-                </button>
-              );
-            })}
-            {customFor(section.label).map((custom) => {
-              const pressed = hasItem(draft, section.group, custom.name);
-              return (
-                <span key={custom.id} className="inline-flex items-center gap-1">
+      {allSections.map((section) => {
+        const own = customFor(section.label);
+        const chosenCount =
+          section.options.filter((option) => hasItem(draft, section.group, option)).length +
+          own.filter((custom) => hasItem(draft, section.group, custom.name)).length;
+        return (
+          <div key={section.label} className="flex flex-col gap-2">
+            <p className="flex items-center gap-2 text-xs font-bold tracking-wide text-foreground/80 uppercase">
+              <span aria-hidden className={cn("size-2 rounded-full", accent.dot)} />
+              {section.label}
+              {chosenCount > 0 && (
+                <span className="rounded-full bg-sage-tint px-2 py-0.5 text-[0.7rem] font-semibold text-sage-ink normal-case">
+                  {chosenCount} gekozen
+                </span>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {section.options.map((option) => {
+                const pressed = hasItem(draft, section.group, option);
+                return (
                   <button
+                    key={option}
                     type="button"
                     aria-pressed={pressed}
-                    onClick={() => onToggle(section.group, custom.name)}
+                    onClick={() => onToggle(section.group, option)}
                     className={neoToggle(pressed, "sm")}
                   >
                     {pressed && <Check className="size-4" aria-hidden />}
-                    {custom.name}
+                    {option}
                   </button>
-                  <button
-                    type="button"
-                    aria-label={`${custom.name} uit de lijst verwijderen`}
-                    onClick={() => onRemoveCustom(custom.id)}
-                    className={neoIconButton}
-                  >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                </span>
-              );
-            })}
+                );
+              })}
+              {own.map((custom) => {
+                const pressed = hasItem(draft, section.group, custom.name);
+                return (
+                  <span key={custom.id} className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-pressed={pressed}
+                      onClick={() => onToggle(section.group, custom.name)}
+                      className={neoToggle(pressed, "sm")}
+                    >
+                      {pressed && <Check className="size-4" aria-hidden />}
+                      {custom.name}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${custom.name} uit de lijst verwijderen`}
+                      onClick={() => onRemoveCustom(custom.id)}
+                      className={neoIconButton}
+                    >
+                      <X className="size-4" aria-hidden />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {others.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          <p className="text-xs font-bold tracking-wide text-foreground/80 uppercase">
             Overige keuzes
           </p>
           <div className="flex flex-wrap gap-2">
@@ -156,36 +214,76 @@ function PillarCard({
         </div>
       )}
 
-      <form onSubmit={handleAdd} className="flex items-center gap-2">
+      <form
+        onSubmit={handleAdd}
+        aria-label={`Eigen ingrediënt toevoegen aan ${pillar.title}`}
+        className="flex flex-col gap-2 border-t border-border pt-4"
+      >
+        <p className="text-xs font-bold tracking-wide text-foreground/80 uppercase">
+          Zelf iets toevoegen
+        </p>
         <input
           value={value}
           onChange={(event) => setValue(event.target.value)}
           maxLength={MAX_INGREDIENT_LENGTH}
-          placeholder="Zelf iets toevoegen"
-          aria-label={`Eigen ingrediënt toevoegen aan ${pillar.title}`}
+          placeholder="Naam van het ingrediënt"
+          aria-label={`Naam van het nieuwe ingrediënt voor ${pillar.title}`}
           className={neoWell}
         />
-        {groups.length > 1 && (
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={`${headingId}-section`} className="text-sm text-muted-foreground">
+            Onder
+          </label>
           <select
-            value={targetGroup}
-            onChange={(event) => setTargetGroup(event.target.value as IngredientGroup)}
-            aria-label="Toevoegen als"
-            className={cn(neoWell, "w-auto shrink-0")}
+            id={`${headingId}-section`}
+            value={sectionKey}
+            onChange={(event) => setSectionKey(event.target.value)}
+            className={cn(neoWell, "w-auto min-w-0 flex-1")}
           >
-            {groups.map((group) => (
-              <option key={group} value={group}>
-                {PILLAR_BY_GROUP[group].badge}
+            {allSections.map((section) => (
+              <option key={section.label} value={section.label}>
+                {section.label}
               </option>
             ))}
+            <option value={NEW_SECTION}>+ Nieuwe subtitel…</option>
           </select>
+        </div>
+
+        {addingToNew && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={newSection}
+              onChange={(event) => setNewSection(event.target.value)}
+              maxLength={MAX_SECTION_LENGTH}
+              placeholder="Naam van de nieuwe subtitel"
+              aria-label="Naam van de nieuwe subtitel"
+              className={cn(neoWell, "min-w-0 flex-1")}
+            />
+            {groups.length > 1 && (
+              <select
+                value={newGroup}
+                onChange={(event) => setNewGroup(event.target.value as IngredientGroup)}
+                aria-label="Hoort bij"
+                className={cn(neoWell, "w-auto shrink-0")}
+              >
+                {groups.map((group) => (
+                  <option key={group} value={group}>
+                    {PILLAR_BY_GROUP[group].badge}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         )}
+
         <button
           type="submit"
-          disabled={normalizeName(value).length === 0}
-          aria-label="Toevoegen"
-          className={neoIconButton}
+          disabled={!canAdd}
+          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-(--tactile-bg) px-4 py-2.5 text-sm font-semibold text-sage-ink tactile-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
         >
           <Plus className="size-4" aria-hidden />
+          Toevoegen
         </button>
       </form>
     </section>
@@ -217,7 +315,8 @@ export function CustomDishBuilder({
           Zelf samenstellen
         </h2>
         <p className="text-sm text-muted-foreground">
-          Tik op een ingrediënt om het toe te voegen. Tik nog eens om het terug te leggen.
+          Tik op een ingrediënt om het toe te voegen. Tik nog eens om het terug te leggen. Mis je
+          iets? Voeg het toe en kies onder welke subtitel het hoort.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

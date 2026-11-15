@@ -27,7 +27,8 @@ create table if not exists public.weekly_meal_plan (
   "dayOfWeek" text,
   "dishId" text,
   "customNotes" text,
-  "activeVariations" jsonb
+  "activeVariations" jsonb,
+  "oneOffDish" jsonb
 );
 
 create table if not exists public.custom_ingredients (
@@ -51,7 +52,8 @@ alter table public.weekly_meal_plan
   add column if not exists "dayOfWeek" text,
   add column if not exists "dishId" text,
   add column if not exists "customNotes" text,
-  add column if not exists "activeVariations" jsonb;
+  add column if not exists "activeVariations" jsonb,
+  add column if not exists "oneOffDish" jsonb;
 
 -- A leftover NOT NULL user_id column would reject every insert from the app.
 do $$

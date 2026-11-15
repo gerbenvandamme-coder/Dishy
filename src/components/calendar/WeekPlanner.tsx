@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ShoppingCart } from "lucide-react";
+import { ArrowLeftRight, ShoppingCart, X } from "lucide-react";
 import type { Dish, WeeklyMealPlan } from "@/types/dish";
 import { deleteMealPlanEntry, getMealPlan, saveMealPlan } from "@/lib/supabase";
 import { subscribeToMealPlan } from "@/lib/realtime";
 import { useApp } from "@/components/app/AppProvider";
 import { DishDetailModal } from "@/components/dishes/DishDetailModal";
-import { pillInset, sageButton } from "@/components/dishes/neo";
+import { neoButton, neoToggle, pillInset, sageButton } from "@/components/dishes/neo";
 import { ColruytSheet } from "@/components/calendar/ColruytSheet";
 import { DishPickerSheet } from "@/components/calendar/DishPickerSheet";
 import { WeekNavigation } from "@/components/calendar/WeekNavigation";
@@ -47,10 +47,25 @@ function upsertEntry(plan: WeeklyMealPlan[], entry: WeeklyMealPlan): WeeklyMealP
     : [...plan, entry];
 }
 
+/** A day has a dish when it holds a library dish or a one-off dish. */
+function hasDish(entry: WeeklyMealPlan | undefined): entry is WeeklyMealPlan {
+  return entry !== undefined && Boolean(entry.dishId || entry.oneOffDish);
+}
+
+const WEEK_PARAM_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The week to show first: "?week=YYYY-MM-DD" (set after adding a one-off dish), otherwise this week. */
+function initialWeekOffset(todayKey: string): number {
+  const week = new URLSearchParams(window.location.search).get("week");
+  return week !== null && WEEK_PARAM_PATTERN.test(week) ? weeksBetween(todayKey, week) : 0;
+}
+
 interface ModalState {
   date: string;
   dish: Dish;
   variations: string[];
+  /** The dish belongs to this day only, so saving must not touch the library. */
+  oneOff: boolean;
 }
 
 interface PlannerBoardProps {
@@ -65,8 +80,10 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
 
   const [plan, setPlan] = useState(initialPlan);
   const [checkedByWeek, setCheckedByWeek] = useState(initialChecked);
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(() => initialWeekOffset(todayKey));
   const [shoppingOpen, setShoppingOpen] = useState(false);
+  const [swapMode, setSwapMode] = useState(false);
+  const [swapSource, setSwapSource] = useState<string | null>(null);
 
   // Targets stay set while their dialog closes, so the exit animation does not go blank.
   const [pickerDate, setPickerDate] = useState<string | null>(null);
@@ -85,6 +102,18 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
     });
   }, []);
 
+  useEffect(() => {
+    if (!swapMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSwapMode(false);
+        setSwapSource(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [swapMode]);
+
   const weekStart = startOfWeek(addDays(todayKey, weekOffset * 7));
   const days = getWeekDays(weekStart);
   const dishById = new Map(dishes.map((dish) => [dish.id, dish] as const));
@@ -92,8 +121,13 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
 
   const slots: DaySlot[] = days.map((day) => {
     const entry = entryByDate.get(day.date);
-    const dish = entry?.dishId ? dishById.get(entry.dishId) : undefined;
-    return { ...day, dish, activeVariations: dish ? (entry?.activeVariations ?? []) : [] };
+    const dish = entry?.oneOffDish ?? (entry?.dishId ? dishById.get(entry.dishId) : undefined);
+    return {
+      ...day,
+      dish,
+      isOneOff: Boolean(entry?.oneOffDish),
+      activeVariations: dish ? (entry?.activeVariations ?? []) : [],
+    };
   });
 
   const weekEntries = days.flatMap((day) => entryByDate.get(day.date) ?? []);
@@ -112,6 +146,7 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
       before !== undefined &&
       before.dayOfWeek === entry.dayOfWeek &&
       before.dishId === entry.dishId &&
+      JSON.stringify(before.oneOffDish ?? null) === JSON.stringify(entry.oneOffDish ?? null) &&
       before.customNotes === entry.customNotes &&
       (before.activeVariations ?? []).join("\u0000") === (entry.activeVariations ?? []).join("\u0000")
     );
@@ -151,19 +186,38 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
   /** Moves a dish to another day. When that day already has a dish, the two swap. */
   const moveDish = (from: string, to: string) => {
     const source = entryByDate.get(from);
-    if (!source?.dishId || from === to) return;
+    if (!hasDish(source) || from === to) return;
     const target = entryByDate.get(to);
 
     const next = plan.filter((entry) => entry.date !== from && entry.date !== to);
     next.push({ ...source, date: to, dayOfWeek: dayNameOf(to) });
 
     const removed: string[] = [];
-    if (target?.dishId) {
+    if (hasDish(target)) {
       next.push({ ...target, date: from, dayOfWeek: dayNameOf(from) });
     } else {
       removed.push(from);
     }
     commitPlan(next, removed);
+  };
+
+  /** Swap mode: the first tap picks a dish up, the next tap on another day puts it down or swaps. */
+  const handleSwapSelect = (date: string) => {
+    if (swapSource === null) {
+      if (hasDish(entryByDate.get(date))) setSwapSource(date);
+      return;
+    }
+    if (swapSource === date) {
+      setSwapSource(null);
+      return;
+    }
+    moveDish(swapSource, date);
+    setSwapSource(null);
+  };
+
+  const toggleSwapMode = () => {
+    setSwapMode((previous) => !previous);
+    setSwapSource(null);
   };
 
   const setVariations = (date: string, variations: string[]) => {
@@ -181,7 +235,12 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
 
   const openDish = (slot: DaySlot) => {
     if (!slot.dish) return;
-    setModal({ date: slot.date, dish: slot.dish, variations: slot.activeVariations });
+    setModal({
+      date: slot.date,
+      dish: slot.dish,
+      variations: slot.activeVariations,
+      oneOff: slot.isOneOff,
+    });
     setModalOpen(true);
   };
 
@@ -210,38 +269,88 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
     setPickerOpen(false);
   };
 
+  const sourceEntry = swapSource ? entryByDate.get(swapSource) : undefined;
+  const sourceDish = sourceEntry?.oneOffDish ?? (sourceEntry?.dishId ? dishById.get(sourceEntry.dishId) : undefined);
+  const sourceLabel = swapSource ? `${dayNameOf(swapSource)} ${formatShortDate(swapSource)}` : "";
+
   const pickerEntry = pickerDate ? entryByDate.get(pickerDate) : undefined;
   const pickerLabel = pickerDate ? `${dayNameOf(pickerDate)} ${formatShortDate(pickerDate)}` : "";
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:py-12">
-      <header className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Weekmenu</h1>
-          <p className="mt-1 text-muted-foreground" aria-live="polite">
-            {weekTitle} · {weekRange} · {relativeWeekLabel(weekOffset)}
-          </p>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
+      <header className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div>
+            <p className="text-sm font-bold tracking-wide text-sage-ink uppercase" aria-live="polite">
+              {relativeWeekLabel(weekOffset)}
+            </p>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">{weekTitle}</h1>
+            <p className="mt-1 text-muted-foreground">{weekRange}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              aria-pressed={swapMode}
+              onClick={toggleSwapMode}
+              className={neoToggle(swapMode)}
+            >
+              <ArrowLeftRight className="size-4" aria-hidden />
+              Omwisselen
+            </button>
+            <button type="button" onClick={() => setShoppingOpen(true)} className={sageButton}>
+              <ShoppingCart className="size-4" aria-hidden />
+              Boodschappen {weekTitle.toLowerCase()}
+              {itemCount > 0 && <span className={pillInset}>{itemCount}</span>}
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <WeekNavigation weekOffset={weekOffset} onChange={setWeekOffset} />
-          <button type="button" onClick={() => setShoppingOpen(true)} className={sageButton}>
-            <ShoppingCart className="size-4" aria-hidden />
-            Ingrediënten deze week (Colruyt Xtra)
-            {itemCount > 0 && <span className={pillInset}>{itemCount}</span>}
+        <WeekNavigation weekOffset={weekOffset} onChange={setWeekOffset} />
+      </header>
+
+      {swapMode && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sage-border bg-sage-tint px-4 py-3 text-sm"
+        >
+          <p className="min-w-0 text-foreground">
+            {swapSource === null ? (
+              <>
+                <strong className="font-bold">Omwisselmodus.</strong> Tik op het gerecht dat je wilt
+                verplaatsen.
+              </>
+            ) : (
+              <>
+                <strong className="font-bold">
+                  {sourceLabel}
+                  {sourceDish ? `: ${sourceDish.name}` : ""}
+                </strong>{" "}
+                is gekozen. Tik op een andere dag. Staat daar al een gerecht, dan wisselen ze om. Je
+                kan ook naar een andere week bladeren.
+              </>
+            )}
+          </p>
+          <button type="button" onClick={toggleSwapMode} className={neoButton}>
+            <X className="size-4" aria-hidden />
+            Klaar
           </button>
         </div>
-      </header>
+      )}
 
       <WeekView
         slots={slots}
         todayKey={todayKey}
         selectedDate={modalOpen ? (modal?.date ?? null) : null}
         editMode={editMode}
+        swapMode={swapMode}
+        swapSource={swapSource}
         onOpenDish={openDish}
         onPick={openPicker}
         onClear={clearDay}
         onMove={moveDish}
+        onSwapSelect={handleSwapSelect}
       />
 
       <DishPickerSheet
@@ -259,7 +368,10 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
       <ColruytSheet
         open={shoppingOpen}
         onOpenChange={setShoppingOpen}
-        weekLabel={`${weekTitle} · ${weekRange}`}
+        weekTitle={weekTitle}
+        weekRange={weekRange}
+        weekRelative={relativeWeekLabel(weekOffset)}
+        onWeekChange={(step) => setWeekOffset((previous) => previous + step)}
         departments={departments}
         checked={checkedKeys}
         onToggle={toggleChecked}
@@ -277,12 +389,19 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
         }}
         onOpenChange={setModalOpen}
         onSave={(dish) => {
-          upsertDish(dish);
+          if (modal?.oneOff) {
+            // A one-off dish is edited in the plan only, never written to the library.
+            const entry = entryByDate.get(modal.date);
+            if (entry) commitPlan(upsertEntry(plan, { ...entry, oneOffDish: dish }));
+          } else {
+            upsertDish(dish);
+          }
           setModalOpen(false);
         }}
         onRequestDelete={(dish) => {
           setModalOpen(false);
-          requestDelete(dish);
+          if (modal?.oneOff) clearDay(modal.date);
+          else requestDelete(dish);
         }}
       />
     </div>

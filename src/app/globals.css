@@ -47,6 +47,16 @@
   --color-sage-active: var(--sage-active);
   --color-sage-tint: var(--sage-tint);
   --color-sage-border: var(--sage-border);
+  /* Sage for text: darker than the accent so small labels stay readable */
+  --color-sage-ink: var(--sage-ink);
+
+  /* One accent per ingredient pillar, and one for dishes planned for a single day */
+  --color-pillar-eiwit: var(--pillar-eiwit);
+  --color-pillar-basis: var(--pillar-basis);
+  --color-pillar-groenten: var(--pillar-groenten);
+  --color-pillar-saus: var(--pillar-saus);
+  --color-pillar-extra: var(--pillar-extra);
+  --color-oneoff: var(--oneoff);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -74,6 +84,15 @@
   --sage-active: #3a5442;
   --sage-tint: rgba(85, 122, 97, 0.12);
   --sage-border: rgba(85, 122, 97, 0.28);
+  --sage-ink: #35523e;
+
+  /* Pillar accents (text colors, each at least 5:1 on the card surface) */
+  --pillar-eiwit: #9a4331;
+  --pillar-basis: #86600f;
+  --pillar-groenten: #2f6b3b;
+  --pillar-saus: #8f3558;
+  --pillar-extra: #3a5f8c;
+  --oneoff: #5f3fa0;
 
   /* shadcn tokens */
   --background: #ebf0ec;
@@ -87,7 +106,7 @@
   --secondary: #dde6df;
   --secondary-foreground: #2a3a30;
   --muted: #dde6df;
-  --muted-foreground: #52665a;
+  --muted-foreground: #455a4e;
   --accent: #dce7df;
   --accent-foreground: #2e4a39;
   --destructive: oklch(0.577 0.245 27.325);
@@ -146,6 +165,14 @@
   --sage-active: #557a61;
   --sage-tint: rgba(107, 148, 121, 0.12);
   --sage-border: rgba(107, 148, 121, 0.28);
+  --sage-ink: #a9c7b3;
+
+  --pillar-eiwit: #ec9a85;
+  --pillar-basis: #e6bf72;
+  --pillar-groenten: #8fcb9a;
+  --pillar-saus: #e792b2;
+  --pillar-extra: #9fc1e8;
+  --oneoff: #b9a2ee;
 
   --background: #121614;
   --foreground: #e6ede8;

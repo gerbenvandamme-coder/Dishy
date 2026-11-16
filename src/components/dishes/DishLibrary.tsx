@@ -113,11 +113,11 @@ export function DishLibrary() {
       </header>
 
       {dishes === null ? (
-        <ul aria-busy="true" className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <ul aria-busy="true" className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
           {[0, 1, 2].map((index) => (
             <li
               key={index}
-              className="h-80 animate-pulse rounded-3xl bg-(--tactile-bg) tactile-sunken motion-reduce:animate-none"
+              className="h-56 animate-pulse sm:h-80 rounded-3xl bg-(--tactile-bg) tactile-sunken motion-reduce:animate-none"
             />
           ))}
         </ul>
@@ -152,7 +152,7 @@ export function DishLibrary() {
           ))}
         </ul>
       ) : (
-        <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
           {visible.map((dish) => (
             <li key={dish.id}>
               <DishCard

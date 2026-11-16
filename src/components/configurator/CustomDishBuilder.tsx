@@ -56,6 +56,8 @@ function PillarCard({
   const [sectionKey, setSectionKey] = useState(pillar.sections[0].label);
   const [newSection, setNewSection] = useState("");
   const [newGroup, setNewGroup] = useState<IngredientGroup>(groups[0]);
+  // The add form is folded away until it is needed, so the four pillars stay short on a phone.
+  const [addOpen, setAddOpen] = useState(false);
   const headingId = `builder-${pillar.id}`;
 
   const pillarCustom = customItems.filter((item) => item.pillarId === pillar.id);
@@ -214,78 +216,100 @@ function PillarCard({
         </div>
       )}
 
-      <form
-        onSubmit={handleAdd}
-        aria-label={`Eigen ingrediënt toevoegen aan ${pillar.title}`}
-        className="flex flex-col gap-2 border-t border-border pt-4"
-      >
-        <p className="text-xs font-bold tracking-wide text-foreground/80 uppercase">
-          Zelf iets toevoegen
-        </p>
-        <input
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          maxLength={MAX_INGREDIENT_LENGTH}
-          placeholder="Naam van het ingrediënt"
-          aria-label={`Naam van het nieuwe ingrediënt voor ${pillar.title}`}
-          className={neoWell}
-        />
+      {addOpen ? (
+        <form
+          onSubmit={handleAdd}
+          aria-label={`Eigen ingrediënt toevoegen aan ${pillar.title}`}
+          className="flex flex-col gap-2 border-t border-border pt-4"
+        >
+          <p className="text-xs font-bold tracking-wide text-foreground/80 uppercase">
+            Zelf iets toevoegen
+          </p>
+          <input
+            autoFocus
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            maxLength={MAX_INGREDIENT_LENGTH}
+            placeholder="Naam van het ingrediënt"
+            aria-label={`Naam van het nieuwe ingrediënt voor ${pillar.title}`}
+            className={neoWell}
+          />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor={`${headingId}-section`} className="text-sm text-muted-foreground">
-            Onder
-          </label>
-          <select
-            id={`${headingId}-section`}
-            value={sectionKey}
-            onChange={(event) => setSectionKey(event.target.value)}
-            className={cn(neoWell, "w-auto min-w-0 flex-1")}
-          >
-            {allSections.map((section) => (
-              <option key={section.label} value={section.label}>
-                {section.label}
-              </option>
-            ))}
-            <option value={NEW_SECTION}>+ Nieuwe subtitel…</option>
-          </select>
-        </div>
-
-        {addingToNew && (
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={newSection}
-              onChange={(event) => setNewSection(event.target.value)}
-              maxLength={MAX_SECTION_LENGTH}
-              placeholder="Naam van de nieuwe subtitel"
-              aria-label="Naam van de nieuwe subtitel"
-              className={cn(neoWell, "min-w-0 flex-1")}
-            />
-            {groups.length > 1 && (
-              <select
-                value={newGroup}
-                onChange={(event) => setNewGroup(event.target.value as IngredientGroup)}
-                aria-label="Hoort bij"
-                className={cn(neoWell, "w-auto shrink-0")}
-              >
-                {groups.map((group) => (
-                  <option key={group} value={group}>
-                    {PILLAR_BY_GROUP[group].badge}
-                  </option>
-                ))}
-              </select>
-            )}
+            <label htmlFor={`${headingId}-section`} className="text-sm text-muted-foreground">
+              Onder
+            </label>
+            <select
+              id={`${headingId}-section`}
+              value={sectionKey}
+              onChange={(event) => setSectionKey(event.target.value)}
+              className={cn(neoWell, "w-auto min-w-0 flex-1")}
+            >
+              {allSections.map((section) => (
+                <option key={section.label} value={section.label}>
+                  {section.label}
+                </option>
+              ))}
+              <option value={NEW_SECTION}>+ Nieuwe subtitel…</option>
+            </select>
           </div>
-        )}
 
+          {addingToNew && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={newSection}
+                onChange={(event) => setNewSection(event.target.value)}
+                maxLength={MAX_SECTION_LENGTH}
+                placeholder="Naam van de nieuwe subtitel"
+                aria-label="Naam van de nieuwe subtitel"
+                className={cn(neoWell, "min-w-0 flex-1")}
+              />
+              {groups.length > 1 && (
+                <select
+                  value={newGroup}
+                  onChange={(event) => setNewGroup(event.target.value as IngredientGroup)}
+                  aria-label="Hoort bij"
+                  className={cn(neoWell, "w-auto shrink-0")}
+                >
+                  {groups.map((group) => (
+                    <option key={group} value={group}>
+                      {PILLAR_BY_GROUP[group].badge}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setAddOpen(false)}
+              className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl px-4 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              Sluiten
+            </button>
+            <button
+              type="submit"
+              disabled={!canAdd}
+              className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-(--tactile-bg) px-4 py-2.5 text-sm font-semibold text-sage-ink tactile-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
+            >
+              <Plus className="size-4" aria-hidden />
+              Toevoegen
+            </button>
+          </div>
+        </form>
+      ) : (
         <button
-          type="submit"
-          disabled={!canAdd}
-          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-(--tactile-bg) px-4 py-2.5 text-sm font-semibold text-sage-ink tactile-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
+          type="button"
+          aria-expanded={false}
+          onClick={() => setAddOpen(true)}
+          className="inline-flex min-h-11 cursor-pointer items-center gap-2 self-start rounded-2xl px-2 text-sm font-semibold text-sage-ink underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <Plus className="size-4" aria-hidden />
-          Toevoegen
+          Iets anders toevoegen
         </button>
-      </form>
+      )}
     </section>
   );
 }

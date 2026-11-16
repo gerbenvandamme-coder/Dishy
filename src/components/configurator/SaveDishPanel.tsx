@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type FormEvent, type RefObject } from "react";
+import { useEffect, useId, useState, type FormEvent, type RefObject } from "react";
 import { CalendarPlus, Library, Loader2, RotateCcw } from "lucide-react";
 import type { Dish } from "@/types/dish";
 import { cn } from "@/lib/utils";
@@ -18,25 +18,22 @@ interface SaveDishPanelProps {
   prepTime: string;
   /** False while the dish library is still loading, because saving needs it. */
   ready: boolean;
-  /** The day for the weekmenu, as a "YYYY-MM-DD" key. Empty while it is not known yet. */
-  weekDate: string;
-  /** For example "Woensdag 18 nov.". Empty when the date is not valid. */
+  /** For example "Woensdag 18 nov.". Only set when the planner already picked the day. Otherwise the user picks it in the planner. */
   weekDateLabel: string;
   /** Name of the dish that is already planned on that day and would be replaced. */
   replacesDishName?: string;
-  /** The user came from a day in the weekplanner, so adding to the week is the main action. */
+  /** The user came from a day in the weekplanner, so adding to the week is the main action and the day is known. */
   fromPlanner: boolean;
   /** True while the dish is being put on the weekmenu. */
   addingToWeek: boolean;
   onNameChange: (name: string) => void;
   onResetName: () => void;
   onPrepTimeChange: (prepTime: string) => void;
-  onWeekDateChange: (date: string) => void;
   onClear: () => void;
   /** Saves the dish in the library. */
   onSave: (dish: Dish) => void;
-  /** Puts the dish on the weekmenu for one day. The library stays untouched. */
-  onAddToWeek: (dish: Dish, date: string) => void;
+  /** Puts the dish on the weekmenu. The library stays untouched. */
+  onAddToWeek: (dish: Dish) => void;
 }
 
 /** Summary of the composed dish, an editable title, and the two ways to keep it. */
@@ -47,7 +44,6 @@ export function SaveDishPanel({
   nameIsCustom,
   prepTime,
   ready,
-  weekDate,
   weekDateLabel,
   replacesDishName,
   fromPlanner,
@@ -55,18 +51,16 @@ export function SaveDishPanel({
   onNameChange,
   onResetName,
   onPrepTimeChange,
-  onWeekDateChange,
   onClear,
   onSave,
   onAddToWeek,
 }: SaveDishPanelProps) {
   const hintId = useId();
-  const dateId = useId();
   const selectedCount = countItems(draft);
   const hasName = normalizeName(name).length > 0;
   const hasDraft = selectedCount > 0 && hasName;
   const canSave = ready && hasDraft;
-  const canAddToWeek = hasDraft && weekDateLabel.length > 0 && !addingToWeek;
+  const canAddToWeek = hasDraft && !addingToWeek;
 
   let blockedReason = "";
   if (selectedCount === 0) blockedReason = "Kies eerst minstens één ingrediënt.";
@@ -91,8 +85,21 @@ export function SaveDishPanel({
 
   const handleAddToWeek = () => {
     if (!canAddToWeek) return;
-    onAddToWeek(buildDish("eenmalig"), weekDate);
+    onAddToWeek(buildDish("eenmalig"));
   };
+
+  // The save section scrolls out of view on a phone, so its two actions also live in a bar at the bottom.
+  const [sectionVisible, setSectionVisible] = useState(true);
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const observer = new IntersectionObserver(([entry]) => setSectionVisible(entry.isIntersecting), {
+      threshold: 0.15,
+    });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [sectionRef]);
+  const showQuickBar = hasDraft && !sectionVisible;
 
   const weekBlock = (
     <div
@@ -107,24 +114,16 @@ export function SaveDishPanel({
           Zet het gerecht op één dag. Het komt <strong>niet</strong> in je bibliotheek.
         </p>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={dateId} className="text-sm font-medium">
-          Op welke dag?
-        </label>
-        <input
-          id={dateId}
-          type="date"
-          value={weekDate}
-          onChange={(event) => onWeekDateChange(event.target.value)}
-          className={neoWell}
-        />
-        {weekDateLabel && <p className="text-xs text-muted-foreground">{weekDateLabel}</p>}
-        {replacesDishName && (
-          <p role="status" className="text-xs font-medium text-pillar-saus">
-            Let op: {replacesDishName} staat al op die dag en wordt vervangen.
-          </p>
-        )}
-      </div>
+      <p className="text-sm font-medium">
+        {weekDateLabel
+          ? `Het komt op ${weekDateLabel}.`
+          : "Je kiest daarna in de weekplanner zelf de dag."}
+      </p>
+      {replacesDishName && (
+        <p role="status" className="text-xs font-medium text-pillar-saus">
+          Let op: {replacesDishName} staat al op die dag en wordt vervangen.
+        </p>
+      )}
       <button
         type="button"
         onClick={handleAddToWeek}
@@ -247,6 +246,37 @@ export function SaveDishPanel({
           </p>
         )}
       </form>
+      {showQuickBar && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+          <div className="pointer-events-auto mx-auto flex max-w-4xl flex-col gap-2 rounded-3xl border border-(--tactile-border) bg-(--tactile-bg) p-3 shadow-[0_10px_30px_var(--tactile-shadow),0_2px_6px_var(--tactile-shadow)]">
+            <p className="truncate px-1 text-sm font-semibold">{normalizeName(name)}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleAddToWeek}
+                disabled={!canAddToWeek}
+                className={cn(primaryButton, "gap-2 px-3 py-3 text-sm sm:text-base")}
+              >
+                {addingToWeek ? (
+                  <Loader2 className="size-5 animate-spin" aria-hidden />
+                ) : (
+                  <CalendarPlus className="size-5" aria-hidden />
+                )}
+                Weekmenu
+              </button>
+              <button
+                type="button"
+                onClick={() => canSave && onSave(buildDish("dish"))}
+                disabled={!canSave}
+                className={cn(neoButton, "min-h-12 w-full")}
+              >
+                <Library className="size-5" aria-hidden />
+                Bibliotheek
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

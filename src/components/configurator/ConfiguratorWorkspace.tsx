@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Dish, IngredientGroup, WeeklyMealPlan } from "@/types/dish";
 import { getMealPlan, saveMealPlan } from "@/lib/supabase";
 import { useApp } from "@/components/app/AppProvider";
+import { setPendingAssignment } from "@/lib/pendingAssignment";
 import { dayNameOf, formatShortDate, fromDateKey, toDateKey } from "@/components/calendar/weekUtils";
 import {
   EMPTY_DRAFT,
@@ -22,11 +23,10 @@ import { useCustomIngredients } from "@/components/configurator/useCustomIngredi
 /** Where the user lands after saving a dish. */
 const AFTER_SAVE_PATH = "/gerechten";
 
-/* The URL and today's date only exist in the browser. The server snapshot is empty, so the
+/* The URL only exists in the browser. The server snapshot is empty, so the
    static HTML never contains them and hydration cannot mismatch. */
 const subscribeNoop = () => () => {};
 const getSearch = (): string => window.location.search;
-const getTodayKey = (): string => toDateKey(new Date());
 const getServerValue = (): string => "";
 
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,11 +51,10 @@ export function ConfiguratorWorkspace() {
 
   // "?dag=YYYY-MM-DD" is set by the weekplanner when the user wants a one-off dish for that day.
   const search = useSyncExternalStore(subscribeNoop, getSearch, getServerValue);
-  const todayKey = useSyncExternalStore(subscribeNoop, getTodayKey, getServerValue);
   const dayParam = new URLSearchParams(search).get("dag") ?? "";
   const fromPlanner = isValidDateKey(dayParam);
-  const [chosenDate, setChosenDate] = useState<string | null>(null);
-  const weekDate = chosenDate ?? (fromPlanner ? dayParam : todayKey);
+  // Without a day from the planner, the user picks the day in the planner's assign mode.
+  const weekDate = fromPlanner ? dayParam : "";
   const [plan, setPlan] = useState<WeeklyMealPlan[]>([]);
   const [addingToWeek, setAddingToWeek] = useState(false);
 
@@ -120,9 +119,19 @@ export function ConfiguratorWorkspace() {
     plannedEntry?.oneOffDish?.name ??
     (plannedEntry?.dishId ? dishes?.find((dish) => dish.id === plannedEntry.dishId)?.name : undefined);
 
-  /** Puts the dish on one day of the weekmenu. It is stored in the plan, not in the library. */
-  const handleAddToWeek = (dish: Dish, date: string) => {
-    if (!isValidDateKey(date)) return;
+  /**
+   * Puts the dish on the weekmenu as a one-off dish. It is stored in the plan, not in the library.
+   * With a day from the planner it is placed right away. Without one, the dish waits and the
+   * planner opens in assign mode, where the user taps the day.
+   */
+  const handleAddToWeek = (dish: Dish) => {
+    if (!isValidDateKey(weekDate)) {
+      setAddingToWeek(true);
+      setPendingAssignment(dish);
+      router.push("/?toewijzen=1");
+      return;
+    }
+    const date = weekDate;
     setAddingToWeek(true);
     getMealPlan()
       .catch((error: unknown) => {
@@ -149,7 +158,7 @@ export function ConfiguratorWorkspace() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pt-8 pb-32 sm:px-6 sm:pt-12">
       <header className="flex flex-col gap-2">
         <h1 className="font-display text-3xl leading-tight font-black tracking-tight sm:text-4xl">
           Stel een gerecht samen
@@ -187,7 +196,6 @@ export function ConfiguratorWorkspace() {
         nameIsCustom={customName !== null}
         prepTime={prepTime}
         ready={dishes !== null}
-        weekDate={weekDate}
         weekDateLabel={describeDay(weekDate)}
         replacesDishName={replacesDishName}
         fromPlanner={fromPlanner}
@@ -195,7 +203,6 @@ export function ConfiguratorWorkspace() {
         onNameChange={setCustomName}
         onResetName={() => setCustomName(null)}
         onPrepTimeChange={setPrepTime}
-        onWeekDateChange={setChosenDate}
         onClear={handleClear}
         onSave={handleSave}
         onAddToWeek={handleAddToWeek}

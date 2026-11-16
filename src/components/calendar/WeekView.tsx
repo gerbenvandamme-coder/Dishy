@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
-import { ArrowLeftRight, GripVertical, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeftRight, CalendarPlus, GripVertical, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Dish } from "@/types/dish";
 import { cn } from "@/lib/utils";
 import { DishImage } from "@/components/dishes/DishImage";
@@ -29,10 +29,13 @@ interface WeekViewProps {
   /** The day whose dish is picked up in swap mode. */
   swapSource: string | null;
   onOpenDish: (slot: DaySlot) => void;
+  /** Assign mode: the dish from the configurator that still needs a day. Every tile becomes a target. */
+  assignDish: Dish | null;
   onPick: (date: string) => void;
   onClear: (date: string) => void;
   onMove: (from: string, to: string) => void;
   onSwapSelect: (date: string) => void;
+  onAssign: (date: string) => void;
 }
 
 /** Today sits slightly higher than the other tiles and gets a sage ring. */
@@ -44,6 +47,9 @@ const SOURCE_TILE = "ring-4 ring-sage -translate-y-1";
 /** The detail modal is open for this tile. */
 const SELECTED_RING = "ring-2 ring-sage/70";
 
+/** Every tile outlined while a mode (swap or assign) is on, so the screen clearly reads as "in a mode". */
+const MODE_TILE = "outline-2 outline-offset-2 outline-dashed outline-sage/50";
+
 const DROP_TARGET = "outline-2 outline-offset-2 outline-dashed outline-sage";
 
 const CLEAR_BUTTON =
@@ -52,11 +58,26 @@ const CLEAR_BUTTON =
 /** Keeps the day title clear of the round buttons in the tile's top-right corner. */
 type ControlSpace = "none" | "one" | "two";
 
+/* On a phone the tile is a compact row (photo left, text right) and the buttons sit at the right
+   edge of the whole tile. From sm up the tile is tall and the buttons only overlap the header. */
 const CONTROL_PADDING: Record<ControlSpace, string> = {
   none: "",
-  one: "pr-12",
-  two: "pr-24",
+  one: "sm:pr-16",
+  two: "sm:pr-28",
 };
+
+const TILE_CONTROL_PADDING: Record<ControlSpace, string> = {
+  none: "",
+  one: "max-sm:pr-16",
+  two: "max-sm:pr-28",
+};
+
+/** Phone layout of a tile: a two-column grid with the photo spanning the rows on the left. */
+const COMPACT_TILE =
+  "max-sm:grid max-sm:grid-cols-[4.5rem_minmax(0,1fr)] max-sm:content-center max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-1 max-sm:p-3";
+
+/** Everything except the photo goes in the right column of the phone layout. */
+const RIGHT_COLUMN = "max-sm:col-start-2";
 
 interface DayHeaderProps {
   slot: DaySlot;
@@ -67,8 +88,14 @@ interface DayHeaderProps {
 
 function DayHeader({ slot, isToday, draggable, controls }: DayHeaderProps) {
   return (
-    <span className={cn("flex min-w-0 flex-col gap-1", CONTROL_PADDING[controls])}>
-      <span className="flex items-center gap-1 font-display text-xl leading-tight font-extrabold tracking-tight sm:text-2xl">
+    <span
+      className={cn(
+        "flex min-w-0 flex-col gap-1 max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:gap-x-2 max-sm:gap-y-0.5",
+        RIGHT_COLUMN,
+        CONTROL_PADDING[controls],
+      )}
+    >
+      <span className="flex items-center gap-1 font-display text-lg leading-tight font-extrabold tracking-tight sm:text-2xl">
         {draggable && <GripVertical className="-ml-1 size-5 shrink-0 text-muted-foreground" aria-hidden />}
         {slot.dayOfWeek}
       </span>
@@ -83,14 +110,24 @@ function DayHeader({ slot, isToday, draggable, controls }: DayHeaderProps) {
 interface DishSummaryProps {
   slot: DaySlot;
   dish: Dish;
+  /** Rows the photo spans in the phone layout: header and title, plus the hint in a mode. */
+  photoRows: 2 | 3;
 }
 
 /** Photo, title and the small tags under it. Shared by the normal and the swap-mode tile. */
-function DishSummary({ slot, dish }: DishSummaryProps) {
+function DishSummary({ slot, dish, photoRows }: DishSummaryProps) {
   return (
     <>
-      <DishImage src={dish.imageUrl} alt={dish.name} className="aspect-[16/10] w-full" />
-      <span className="flex flex-col gap-2">
+      <DishImage
+        src={dish.imageUrl}
+        alt={dish.name}
+        width={420}
+        className={cn(
+          "aspect-[16/10] w-full max-sm:col-start-1 max-sm:row-start-1 max-sm:aspect-square max-sm:p-1",
+          photoRows === 3 ? "max-sm:row-span-3" : "max-sm:row-span-2",
+        )}
+      />
+      <span className={cn("flex min-w-0 flex-col gap-2 max-sm:gap-1", RIGHT_COLUMN)}>
         <span className="line-clamp-2 text-base leading-snug font-bold text-balance sm:text-lg">
           {dish.name}
         </span>
@@ -127,15 +164,19 @@ export function WeekView({
   swapMode,
   swapSource,
   onOpenDish,
+  assignDish,
   onPick,
   onClear,
   onMove,
   onSwapSelect,
+  onAssign,
 }: WeekViewProps) {
   const [draggingDate, setDraggingDate] = useState<string | null>(null);
   const [overDate, setOverDate] = useState<string | null>(null);
 
-  const dragEnabled = editMode || swapMode;
+  const assignMode = assignDish !== null;
+  const targetMode = swapMode || assignMode;
+  const dragEnabled = !assignMode && (editMode || swapMode);
 
   const endDrag = () => {
     setDraggingDate(null);
@@ -169,7 +210,7 @@ export function WeekView({
   };
 
   return (
-    <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+    <ul className="grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
       {slots.map((slot) => {
         const { dish } = slot;
         const isToday = slot.date === todayKey;
@@ -179,13 +220,16 @@ export function WeekView({
           isToday && !isSource && TODAY_TILE,
           isSource && SOURCE_TILE,
           isSelected && !isToday && !isSource && SELECTED_RING,
+          targetMode && !isSource && !(draggingDate !== null && overDate === slot.date) && MODE_TILE,
         );
         const canDrag = dragEnabled && Boolean(dish);
         const dropTarget = draggingDate !== null && overDate === slot.date && draggingDate !== slot.date;
 
         /** What a tap on this tile does in swap mode, spelled out on the tile itself. */
         let swapHint = "Tik om te kiezen";
-        if (swapSource !== null) {
+        if (assignMode) {
+          swapHint = dish ? "Tik om te vervangen" : "Tik om hier te zetten";
+        } else if (swapSource !== null) {
           if (isSource) swapHint = "Geselecteerd, tik om te annuleren";
           else swapHint = dish ? "Tik om te wisselen" : "Tik om hierheen te zetten";
         } else if (!dish) {
@@ -202,17 +246,17 @@ export function WeekView({
             onDragLeave={(event) => handleDragLeave(event, slot)}
             onDrop={(event) => handleDrop(event, slot)}
             className={cn(
-              "relative min-h-64 rounded-3xl transition-transform duration-200 motion-reduce:transition-none",
+              "relative rounded-3xl transition-transform sm:min-h-64 duration-200 motion-reduce:transition-none",
               canDrag && "cursor-grab",
               draggingDate === slot.date && "opacity-50",
             )}
           >
-            {swapMode ? (
+            {targetMode ? (
               <button
                 type="button"
-                onClick={() => onSwapSelect(slot.date)}
-                disabled={swapSource === null && !dish}
-                aria-pressed={isSource}
+                onClick={() => (assignMode ? onAssign(slot.date) : onSwapSelect(slot.date))}
+                disabled={!assignMode && swapSource === null && !dish}
+                aria-pressed={assignMode ? undefined : isSource}
                 aria-label={
                   dish
                     ? `${slot.dayOfWeek}: ${dish.name}. ${swapHint}`
@@ -220,7 +264,8 @@ export function WeekView({
                 }
                 className={cn(
                   neoCard,
-                  "h-full min-h-64 justify-between disabled:cursor-not-allowed disabled:opacity-60",
+                  COMPACT_TILE,
+                  "h-full justify-between disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-64",
                   !dish && "border-2! border-dashed! border-sage-border!",
                   tileHighlight,
                   dropTarget && DROP_TARGET,
@@ -228,19 +273,27 @@ export function WeekView({
               >
                 <DayHeader slot={slot} isToday={isToday} draggable={false} controls="none" />
                 {dish ? (
-                  <DishSummary slot={slot} dish={dish} />
+                  <DishSummary slot={slot} dish={dish} photoRows={3} />
                 ) : (
-                  <span className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  <span className="flex flex-1 items-center justify-center text-sm text-muted-foreground max-sm:col-start-1 max-sm:row-span-3 max-sm:row-start-1 max-sm:aspect-square max-sm:rounded-2xl max-sm:border-2 max-sm:border-dashed max-sm:border-sage-border">
                     Leeg
                   </span>
                 )}
                 <span
                   className={cn(
-                    "inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold",
-                    isSource ? "bg-sage text-white" : "bg-sage-tint text-sage-ink",
+                    "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold",
+                    "max-sm:min-h-0 max-sm:justify-self-start max-sm:px-2.5 max-sm:py-1 max-sm:text-xs",
+                    RIGHT_COLUMN,
+                    isSource || (assignMode && !dish)
+                      ? "bg-sage text-white dark:text-[#0f1311]"
+                      : "bg-sage-tint text-sage-ink",
                   )}
                 >
-                  <ArrowLeftRight className="size-3.5" aria-hidden />
+                  {assignMode ? (
+                    <CalendarPlus className="size-4" aria-hidden />
+                  ) : (
+                    <ArrowLeftRight className="size-4" aria-hidden />
+                  )}
                   {swapHint}
                 </span>
               </button>
@@ -252,7 +305,9 @@ export function WeekView({
                   aria-label={`Bekijk ${dish.name} op ${slot.dayOfWeek}`}
                   className={cn(
                     neoCard,
-                    "h-full min-h-64 justify-between",
+                    COMPACT_TILE,
+                    TILE_CONTROL_PADDING[editMode ? "two" : "one"],
+                    "h-full justify-between sm:min-h-64",
                     tileHighlight,
                     dropTarget && DROP_TARGET,
                   )}
@@ -263,10 +318,10 @@ export function WeekView({
                     draggable={canDrag}
                     controls={editMode ? "two" : "one"}
                   />
-                  <DishSummary slot={slot} dish={dish} />
+                  <DishSummary slot={slot} dish={dish} photoRows={2} />
                 </button>
 
-                <div className="absolute top-4 right-4 z-10 flex gap-2">
+                <div className="absolute top-3 right-3 z-10 flex gap-2 max-sm:top-1/2 max-sm:-translate-y-1/2">
                   {editMode && (
                     <button
                       type="button"
@@ -292,18 +347,18 @@ export function WeekView({
             ) : (
               <div
                 className={cn(
-                  "flex h-full min-h-64 flex-col justify-between gap-4 rounded-3xl border-2 border-dashed border-sage-border bg-(--tactile-bg) p-4",
+                  "flex h-full flex-col justify-between gap-4 rounded-3xl border-2 border-dashed border-sage-border bg-(--tactile-bg) p-4 sm:min-h-64 max-sm:flex-row max-sm:items-center max-sm:p-3",
                   tileHighlight,
                   dropTarget && DROP_TARGET,
                 )}
               >
                 <DayHeader slot={slot} isToday={isToday} draggable={false} controls="none" />
-                <div className="flex flex-1 items-center justify-center">
+                <div className="flex flex-1 items-center justify-center max-sm:flex-none">
                   <button
                     type="button"
                     onClick={() => onPick(slot.date)}
                     aria-label={`Kies een gerecht voor ${slot.dayOfWeek}`}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-(--tactile-bg) px-4 py-3 text-sm font-semibold text-sage-ink tactile-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-2xl bg-(--tactile-bg) px-4 py-3 text-sm font-semibold text-sage-ink tactile-btn focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     <Plus className="size-5" aria-hidden />
                     Gerecht toevoegen

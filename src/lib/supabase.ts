@@ -4,7 +4,10 @@ import type { CustomIngredient } from "@/types/customIngredient";
 import { mockDishes } from "@/lib/mockDishes";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Supabase calls the public client key "anon key" in older projects and "publishable key" in newer ones.
+// Both names are accepted, so a .env with either one connects.
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 export const DISHES_TABLE = "dishes";
 export const MEAL_PLAN_TABLE = "weekly_meal_plan";

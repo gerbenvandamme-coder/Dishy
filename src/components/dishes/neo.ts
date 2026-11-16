@@ -20,21 +20,21 @@ export const neoSection = `${SURFACE} rounded-2xl p-4 neo-inset`;
 export const neoCard = `${SURFACE} ${FOCUS} flex w-full cursor-pointer flex-col gap-4 rounded-3xl p-4 text-left tactile-raised neo-press active:tactile-sunken active:translate-y-0.5`;
 
 /** Raised button. It sinks on press. */
-export const neoButton = `${SURFACE} ${FOCUS} inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground tactile-btn disabled:pointer-events-none disabled:opacity-50`;
+export const neoButton = `${SURFACE} ${FOCUS} inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl min-h-11 px-4 py-2.5 text-sm font-medium text-foreground tactile-btn disabled:pointer-events-none disabled:opacity-50`;
 
 /** Small round raised button (edit badges, add buttons). */
-export const neoIconButton = `${SURFACE} ${FOCUS} inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground transition-all duration-150 shadow-[2px_2px_5px_var(--tactile-shadow-soft),-2px_-2px_5px_var(--tactile-highlight)] active:translate-y-0.5 active:shadow-[inset_2px_2px_4px_var(--tactile-shadow-soft),inset_-2px_-2px_4px_var(--tactile-inset-highlight)] disabled:pointer-events-none disabled:opacity-40`;
+export const neoIconButton = `${SURFACE} ${FOCUS} inline-flex size-9 pointer-coarse:size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground transition-all duration-150 shadow-[3px_3px_7px_var(--tactile-shadow),-2px_-2px_5px_var(--tactile-highlight)] active:translate-y-0.5 active:shadow-[inset_2px_2px_4px_var(--tactile-shadow-soft),inset_-2px_-2px_4px_var(--tactile-inset-highlight)] disabled:pointer-events-none disabled:opacity-40`;
 
 /** Debossed well for inputs and textareas. */
 export const neoWell = `${SURFACE} ${FOCUS} w-full rounded-xl px-3 py-2 text-sm text-foreground neo-inset placeholder:text-muted-foreground aria-invalid:outline-2 aria-invalid:outline-destructive`;
 
 /** Extruded pill token. */
-export const pillRaised = `${SURFACE} inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground shadow-[2px_2px_5px_rgba(0,0,0,0.1),-2px_-2px_5px_rgba(255,255,255,0.9)] dark:shadow-[2px_2px_5px_rgba(0,0,0,0.45),-2px_-2px_4px_rgba(255,255,255,0.04)]`;
+export const pillRaised = `${SURFACE} inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-foreground shadow-[3px_3px_6px_rgba(0,0,0,0.2),-2px_-2px_5px_rgba(255,255,255,1)] dark:shadow-[3px_3px_6px_rgba(0,0,0,0.7),-2px_-2px_4px_rgba(255,255,255,0.04)]`;
 
 /** Soft debossed tag. */
-export const pillInset = `${SURFACE} inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.8)] dark:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.5),inset_-1px_-1px_3px_rgba(255,255,255,0.04)]`;
+export const pillInset = `${SURFACE} inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground shadow-[inset_2px_2px_4px_rgba(0,0,0,0.2),inset_-2px_-2px_4px_rgba(255,255,255,0.9)] dark:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.65),inset_-1px_-1px_3px_rgba(255,255,255,0.04)]`;
 
-const TOGGLE_BASE = `${FOCUS} inline-flex cursor-pointer items-center gap-2 rounded-2xl neo-press`;
+const TOGGLE_BASE = `${FOCUS} inline-flex cursor-pointer items-center gap-2 rounded-2xl neo-press disabled:pointer-events-none disabled:opacity-50`;
 
 /** Soft debossed sage well for a selected toggle. */
 const TOGGLE_SELECTED =
@@ -96,14 +96,14 @@ export const pillarPill = (group: IngredientGroup): string =>
 export const pillSage = `inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${TOGGLE_SELECTED}`;
 
 /** Primary sage button (save, confirm). It sinks on press. */
-export const sageButton = `${FOCUS} inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#557A61] px-4 py-2.5 text-sm font-semibold text-white shadow-[2px_2px_5px_rgba(0,0,0,0.15),-2px_-2px_5px_rgba(255,255,255,0.6)] transition-all duration-150 hover:bg-[#4a6b55] active:translate-y-0.5 active:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.25)] disabled:pointer-events-none disabled:opacity-50 dark:shadow-[2px_2px_5px_rgba(0,0,0,0.45),-2px_-2px_4px_rgba(255,255,255,0.04)]`;
+export const sageButton = `${FOCUS} inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#557A61] min-h-11 px-4 py-2.5 text-sm font-semibold text-white shadow-[3px_3px_7px_rgba(0,0,0,0.3),-2px_-2px_5px_rgba(255,255,255,0.7)] transition-all duration-150 hover:bg-[#4a6b55] active:translate-y-0.5 active:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.25)] disabled:pointer-events-none disabled:opacity-50 dark:shadow-[2px_2px_5px_rgba(0,0,0,0.45),-2px_-2px_4px_rgba(255,255,255,0.04)]`;
 
 /** One full-width raised row in the dish list. It sinks on press. */
 export const neoListRow = `${SURFACE} ${FOCUS} flex min-w-0 flex-1 cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl px-4 py-3 text-left neo-raised neo-press active:neo-inset active:translate-y-0.5`;
 
 /** Toggle button. When pressed it clicks into a sunken state. */
 export function neoToggle(pressed: boolean, size: "md" | "sm" = "md"): string {
-  const padding = size === "md" ? "px-4 py-2.5 text-sm" : "px-3 py-1.5 text-sm";
+  const padding = size === "md" ? "min-h-11 px-4 py-2.5 text-sm" : "px-3 py-1.5 text-sm pointer-coarse:min-h-11";
   return pressed
     ? `${TOGGLE_BASE} ${padding} font-semibold neo-inset translate-y-0.5`
     : `${TOGGLE_BASE} ${padding} font-medium neo-raised active:neo-inset active:translate-y-0.5`;

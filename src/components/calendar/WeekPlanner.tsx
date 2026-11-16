@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ArrowLeftRight, ShoppingCart, X } from "lucide-react";
+import { ArrowLeftRight, CalendarPlus, ShoppingCart } from "lucide-react";
 import type { Dish, WeeklyMealPlan } from "@/types/dish";
 import { deleteMealPlanEntry, getMealPlan, saveMealPlan } from "@/lib/supabase";
 import { subscribeToMealPlan } from "@/lib/realtime";
+import { cn } from "@/lib/utils";
 import { useApp } from "@/components/app/AppProvider";
 import { DishDetailModal } from "@/components/dishes/DishDetailModal";
-import { neoButton, neoToggle, pillInset, sageButton } from "@/components/dishes/neo";
+import { neoToggle, pillInset, sageButton } from "@/components/dishes/neo";
+import { ModeBar } from "@/components/calendar/ModeBar";
+import {
+  clearPendingAssignment,
+  readPendingAssignment,
+} from "@/lib/pendingAssignment";
 import { ColruytSheet } from "@/components/calendar/ColruytSheet";
 import { DishPickerSheet } from "@/components/calendar/DishPickerSheet";
 import { WeekNavigation } from "@/components/calendar/WeekNavigation";
@@ -60,6 +66,12 @@ function initialWeekOffset(todayKey: string): number {
   return week !== null && WEEK_PARAM_PATTERN.test(week) ? weeksBetween(todayKey, week) : 0;
 }
 
+/** The configurator sends "?toewijzen=1": a dish waits for a day, so the planner opens in assign mode. */
+function initialAssignment(): Dish | null {
+  const flag = new URLSearchParams(window.location.search).get("toewijzen");
+  return flag === "1" ? readPendingAssignment() : null;
+}
+
 interface ModalState {
   date: string;
   dish: Dish;
@@ -84,6 +96,7 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
   const [shoppingOpen, setShoppingOpen] = useState(false);
   const [swapMode, setSwapMode] = useState(false);
   const [swapSource, setSwapSource] = useState<string | null>(null);
+  const [pendingDish, setPendingDish] = useState<Dish | null>(initialAssignment);
 
   // Targets stay set while their dialog closes, so the exit animation does not go blank.
   const [pickerDate, setPickerDate] = useState<string | null>(null);
@@ -102,17 +115,27 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
     });
   }, []);
 
+  const finishAssign = () => {
+    setPendingDish(null);
+    clearPendingAssignment();
+    window.history.replaceState(null, "", window.location.pathname);
+  };
+
+  const inMode = swapMode || pendingDish !== null;
+
   useEffect(() => {
-    if (!swapMode) return;
+    if (!inMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSwapMode(false);
-        setSwapSource(null);
-      }
+      if (event.key !== "Escape") return;
+      setSwapMode(false);
+      setSwapSource(null);
+      setPendingDish(null);
+      clearPendingAssignment();
+      window.history.replaceState(null, "", window.location.pathname);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [swapMode]);
+  }, [inMode]);
 
   const weekStart = startOfWeek(addDays(todayKey, weekOffset * 7));
   const days = getWeekDays(weekStart);
@@ -174,6 +197,20 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
       }),
     );
     setPickerOpen(false);
+  };
+
+  /** Assign mode: puts the dish from the configurator on the tapped day, as a one-off dish. */
+  const assignToDay = (date: string) => {
+    if (!pendingDish) return;
+    commitPlan(
+      upsertEntry(plan, {
+        date,
+        dayOfWeek: dayNameOf(date),
+        oneOffDish: pendingDish,
+        activeVariations: [],
+      }),
+    );
+    finishAssign();
   };
 
   const clearDay = (date: string) => {
@@ -277,8 +314,13 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
   const pickerLabel = pickerDate ? `${dayNameOf(pickerDate)} ${formatShortDate(pickerDate)}` : "";
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
-      <header className="flex flex-col gap-5">
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:gap-6 sm:px-6 sm:py-8 lg:py-12",
+        inMode && "pb-36",
+      )}
+    >
+      <header className="flex flex-col gap-4 sm:gap-5">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
           <div>
             <p className="text-sm font-bold tracking-wide text-sage-ink uppercase" aria-live="polite">
@@ -288,19 +330,20 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
             <p className="mt-1 text-muted-foreground">{weekRange}</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
             <button
               type="button"
               aria-pressed={swapMode}
+              disabled={pendingDish !== null}
               onClick={toggleSwapMode}
-              className={neoToggle(swapMode)}
+              className={cn(neoToggle(swapMode), "justify-center")}
             >
               <ArrowLeftRight className="size-4" aria-hidden />
               Omwisselen
             </button>
             <button type="button" onClick={() => setShoppingOpen(true)} className={sageButton}>
-              <ShoppingCart className="size-4" aria-hidden />
-              Boodschappen {weekTitle.toLowerCase()}
+              <ShoppingCart className="size-4 shrink-0 max-[400px]:hidden" aria-hidden />
+              Boodschappen<span className="max-sm:sr-only"> {weekTitle.toLowerCase()}</span>
               {itemCount > 0 && <span className={pillInset}>{itemCount}</span>}
             </button>
           </div>
@@ -309,34 +352,31 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
         <WeekNavigation weekOffset={weekOffset} onChange={setWeekOffset} />
       </header>
 
+      {pendingDish && (
+        <ModeBar Icon={CalendarPlus} title="Toewijzingsmodus" exitLabel="Annuleren" onExit={finishAssign}>
+          Tik op de dag voor <strong>{pendingDish.name}</strong>.
+          <span className="max-sm:hidden">
+            {" "}Staat daar al een gerecht, dan wordt het vervangen. Je kan ook naar een andere week
+            bladeren.
+          </span>
+        </ModeBar>
+      )}
+
       {swapMode && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sage-border bg-sage-tint px-4 py-3 text-sm"
-        >
-          <p className="min-w-0 text-foreground">
-            {swapSource === null ? (
-              <>
-                <strong className="font-bold">Omwisselmodus.</strong> Tik op het gerecht dat je wilt
-                verplaatsen.
-              </>
-            ) : (
-              <>
-                <strong className="font-bold">
-                  {sourceLabel}
-                  {sourceDish ? `: ${sourceDish.name}` : ""}
-                </strong>{" "}
-                is gekozen. Tik op een andere dag. Staat daar al een gerecht, dan wisselen ze om. Je
-                kan ook naar een andere week bladeren.
-              </>
-            )}
-          </p>
-          <button type="button" onClick={toggleSwapMode} className={neoButton}>
-            <X className="size-4" aria-hidden />
-            Klaar
-          </button>
-        </div>
+        <ModeBar Icon={ArrowLeftRight} title="Omwisselmodus" exitLabel="Klaar" onExit={toggleSwapMode}>
+          {swapSource === null ? (
+            "Tik op het gerecht dat je wilt verplaatsen."
+          ) : (
+            <>
+              <strong>
+                {sourceLabel}
+                {sourceDish ? `: ${sourceDish.name}` : ""}
+              </strong>{" "}
+              gekozen. Tik op een andere dag
+              <span className="max-sm:hidden">. Staat daar al een gerecht, dan wisselen ze om</span>.
+            </>
+          )}
+        </ModeBar>
       )}
 
       <WeekView
@@ -346,6 +386,8 @@ function PlannerBoard({ todayKey, dishes, initialPlan, initialChecked }: Planner
         editMode={editMode}
         swapMode={swapMode}
         swapSource={swapSource}
+        assignDish={pendingDish}
+        onAssign={assignToDay}
         onOpenDish={openDish}
         onPick={openPicker}
         onClear={clearDay}

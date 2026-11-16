@@ -3,16 +3,19 @@
 import { useState } from "react";
 import { UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { sizedImageUrl } from "@/lib/imageUrl";
 
 interface DishImageProps {
   src?: string;
   alt: string;
   /** Sets the size, for example "aspect-[4/3] w-full". */
   className?: string;
+  /** Largest width the photo is shown at, in CSS pixels. Hosts that can resize send a smaller file. */
+  width?: number;
 }
 
 /** Dish photo in a debossed frame. Shows a placeholder when there is no photo or it fails to load. */
-export function DishImage({ src, alt, className }: DishImageProps) {
+export function DishImage({ src, alt, className, width = 600 }: DishImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showImage = Boolean(src) && failedSrc !== src;
 
@@ -27,9 +30,10 @@ export function DishImage({ src, alt, className }: DishImageProps) {
         {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={src}
+            src={src ? sizedImageUrl(src, width * 2) : undefined}
             alt={alt}
             loading="lazy"
+            decoding="async"
             onError={() => setFailedSrc(src ?? null)}
             className="size-full object-cover"
           />

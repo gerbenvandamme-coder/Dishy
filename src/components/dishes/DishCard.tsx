@@ -20,16 +20,16 @@ export function DishCard({ dish, editMode, onOpen, onEdit, onDelete }: DishCardP
   const pillars = pillarsInDish(dish);
 
   return (
-    <article className="relative">
+    <article className="relative h-full">
       <button
         type="button"
         onClick={() => onOpen(dish)}
         aria-label={`Bekijk ${dish.name}`}
-        className={neoCard}
+        className={cn(neoCard, "h-full max-sm:gap-3 max-sm:rounded-2xl max-sm:p-2.5")}
       >
-        <DishImage src={dish.imageUrl} alt={dish.name} className="aspect-[4/3] w-full" />
-        <span className="flex flex-col gap-3">
-          <span className="block text-lg leading-tight font-semibold tracking-tight text-balance">
+        <DishImage src={dish.imageUrl} alt={dish.name} width={420} className="aspect-[4/3] w-full max-sm:p-1" />
+        <span className="flex flex-col gap-3 max-sm:gap-2 max-sm:px-1 max-sm:pb-1">
+          <span className="line-clamp-3 text-sm leading-tight font-semibold tracking-tight text-balance sm:text-lg">
             {dish.name}
           </span>
           <span className="flex flex-wrap items-center gap-2">
@@ -40,7 +40,7 @@ export function DishCard({ dish, editMode, onOpen, onEdit, onDelete }: DishCardP
               </span>
             )}
             {pillars.map((pillar) => (
-              <span key={pillar.group} className={pillarPill(pillar.group)}>
+              <span key={pillar.group} className={cn(pillarPill(pillar.group), "max-sm:hidden")}>
                 {pillar.badge}
               </span>
             ))}
@@ -49,7 +49,7 @@ export function DishCard({ dish, editMode, onOpen, onEdit, onDelete }: DishCardP
       </button>
 
       {editMode && (
-        <div className="absolute top-6 right-6 flex gap-2">
+        <div className="absolute top-4 right-4 flex gap-2 sm:top-6 sm:right-6">
           <button
             type="button"
             onClick={() => onEdit(dish)}

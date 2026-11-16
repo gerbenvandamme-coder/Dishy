@@ -182,7 +182,7 @@ function PickerBody({
                       onClick={() => onPick(dish)}
                       className={cn(neoToggle(current, "sm"), "w-full justify-start gap-3 text-left")}
                     >
-                      <DishImage src={dish.imageUrl} alt={dish.name} className="size-14 shrink-0" />
+                      <DishImage src={dish.imageUrl} alt={dish.name} width={56} className="size-14 shrink-0" />
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="line-clamp-2 text-sm font-semibold">{dish.name}</span>
                         {dish.prepTime && (

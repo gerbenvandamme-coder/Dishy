@@ -254,6 +254,21 @@
   }
 }
 
+/* Mobile: no pinch-zoom, and no auto-zoom when a field gets focus.
+   iOS Safari zooms into any input with a font size below 16px. */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* ------------------------------------------------------------------
    Tactile (neo-skeuomorphic) design system
    Cards, buttons and wells share one sage surface color, so the paired

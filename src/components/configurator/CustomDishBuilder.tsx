@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, RotateCcw, X } from "lucide-react";
 import type { IngredientGroup } from "@/types/dish";
 import { cn } from "@/lib/utils";
 import {
   PILLAR_STYLE,
-  neoIconButton,
   neoSection,
   neoToggle,
   neoWell,
@@ -19,12 +18,16 @@ import {
   type BuilderSection,
 } from "@/components/configurator/builderCatalog";
 import type { CustomIngredient, NewCustomIngredient } from "@/types/customIngredient";
+import { hiddenIngredientId } from "@/components/configurator/customIngredients";
 
 const MAX_INGREDIENT_LENGTH = 60;
 const MAX_SECTION_LENGTH = 40;
 
 /** Value of the "new subtitle" entry in the subtitle picker. Cannot clash with a real label. */
 const NEW_SECTION = "__nieuw__";
+
+const REMOVE_BADGE =
+  "absolute -top-2 -right-2 z-10 inline-flex size-6 cursor-pointer items-center justify-center rounded-full bg-(--tactile-bg) text-destructive shadow-[2px_2px_4px_var(--tactile-shadow),-1px_-1px_3px_var(--tactile-highlight)] after:absolute after:-inset-2.5 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -35,9 +38,15 @@ interface PillarCardProps {
   draft: Draft;
   /** Shared, user-added ingredients. Only the ones for this pillar are shown. */
   customItems: readonly CustomIngredient[];
+  /** Built-in options someone removed. Stored as marker rows in the same shared list. */
+  hiddenItems: readonly CustomIngredient[];
+  /** Remove buttons only show in edit mode. */
+  editMode: boolean;
   onToggle: (group: IngredientGroup, name: string) => void;
   onAdd: (group: IngredientGroup, name: string) => void;
   onAddCustom: (input: NewCustomIngredient) => void;
+  onHideBuiltIn: (input: NewCustomIngredient) => void;
+  /** Deletes a custom ingredient, or brings a hidden built-in option back. */
   onRemoveCustom: (id: string) => void;
 }
 
@@ -45,9 +54,12 @@ function PillarCard({
   pillar,
   draft,
   customItems,
+  hiddenItems,
+  editMode,
   onToggle,
   onAdd,
   onAddCustom,
+  onHideBuiltIn,
   onRemoveCustom,
 }: PillarCardProps) {
   const groups = Array.from(new Set(pillar.sections.map((section) => section.group)));
@@ -61,6 +73,10 @@ function PillarCard({
   const headingId = `builder-${pillar.id}`;
 
   const pillarCustom = customItems.filter((item) => item.pillarId === pillar.id);
+  const pillarHidden = hiddenItems.filter((item) => item.pillarId === pillar.id);
+  const hiddenIds = new Set(pillarHidden.map((item) => item.id));
+  const isHidden = (sectionLabel: string, option: string) =>
+    hiddenIds.has(hiddenIngredientId(pillar.id, sectionLabel, option));
   const customFor = (sectionLabel: string) =>
     pillarCustom.filter((item) => item.section === sectionLabel);
 
@@ -134,8 +150,10 @@ function PillarCard({
 
       {allSections.map((section) => {
         const own = customFor(section.label);
+        const visibleOptions = section.options.filter((option) => !isHidden(section.label, option));
+        if (visibleOptions.length === 0 && own.length === 0 && !editMode) return null;
         const chosenCount =
-          section.options.filter((option) => hasItem(draft, section.group, option)).length +
+          visibleOptions.filter((option) => hasItem(draft, section.group, option)).length +
           own.filter((custom) => hasItem(draft, section.group, custom.name)).length;
         return (
           <div key={section.label} className="flex flex-col gap-2">
@@ -148,26 +166,44 @@ function PillarCard({
                 </span>
               )}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {section.options.map((option) => {
+            <div className={cn("flex flex-wrap gap-2", editMode && "gap-3 pt-1")}>
+              {visibleOptions.map((option) => {
                 const pressed = hasItem(draft, section.group, option);
                 return (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={pressed}
-                    onClick={() => onToggle(section.group, option)}
-                    className={neoToggle(pressed, "sm")}
-                  >
-                    {pressed && <Check className="size-4" aria-hidden />}
-                    {option}
-                  </button>
+                  <span key={option} className="relative inline-flex">
+                    <button
+                      type="button"
+                      aria-pressed={pressed}
+                      onClick={() => onToggle(section.group, option)}
+                      className={neoToggle(pressed, "sm")}
+                    >
+                      {pressed && <Check className="size-4" aria-hidden />}
+                      {option}
+                    </button>
+                    {editMode && (
+                      <button
+                        type="button"
+                        aria-label={`${option} uit de lijst verwijderen`}
+                        onClick={() =>
+                          onHideBuiltIn({
+                            pillarId: pillar.id,
+                            section: section.label,
+                            group: section.group,
+                            name: option,
+                          })
+                        }
+                        className={REMOVE_BADGE}
+                      >
+                        <X className="size-3.5" strokeWidth={3} aria-hidden />
+                      </button>
+                    )}
+                  </span>
                 );
               })}
               {own.map((custom) => {
                 const pressed = hasItem(draft, section.group, custom.name);
                 return (
-                  <span key={custom.id} className="inline-flex items-center gap-1">
+                  <span key={custom.id} className="relative inline-flex">
                     <button
                       type="button"
                       aria-pressed={pressed}
@@ -177,14 +213,16 @@ function PillarCard({
                       {pressed && <Check className="size-4" aria-hidden />}
                       {custom.name}
                     </button>
-                    <button
-                      type="button"
-                      aria-label={`${custom.name} uit de lijst verwijderen`}
-                      onClick={() => onRemoveCustom(custom.id)}
-                      className={neoIconButton}
-                    >
-                      <X className="size-4" aria-hidden />
-                    </button>
+                    {editMode && (
+                      <button
+                        type="button"
+                        aria-label={`${custom.name} uit de lijst verwijderen`}
+                        onClick={() => onRemoveCustom(custom.id)}
+                        className={REMOVE_BADGE}
+                      >
+                        <X className="size-3.5" strokeWidth={3} aria-hidden />
+                      </button>
+                    )}
                   </span>
                 );
               })}
@@ -210,6 +248,28 @@ function PillarCard({
               >
                 {name}
                 <X className="size-4" aria-hidden />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {editMode && pillarHidden.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-border pt-4">
+          <p className="text-xs font-bold tracking-wide text-foreground/80 uppercase">
+            Verwijderd ({pillarHidden.length})
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {pillarHidden.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-label={`${item.name} terugzetten`}
+                onClick={() => onRemoveCustom(item.id)}
+                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-2xl px-3 text-sm text-muted-foreground line-through decoration-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring pointer-coarse:min-h-11"
+              >
+                <RotateCcw className="size-3.5" aria-hidden />
+                {item.name}
               </button>
             ))}
           </div>
@@ -314,24 +374,11 @@ function PillarCard({
   );
 }
 
-interface CustomDishBuilderProps {
-  draft: Draft;
-  customItems: readonly CustomIngredient[];
-  onToggle: (group: IngredientGroup, name: string) => void;
-  onAdd: (group: IngredientGroup, name: string) => void;
-  onAddCustom: (input: NewCustomIngredient) => void;
-  onRemoveCustom: (id: string) => void;
-}
+type CustomDishBuilderProps = Omit<PillarCardProps, "pillar">;
 
 /** Free-form builder: pick or type ingredients under the four pillars. */
-export function CustomDishBuilder({
-  draft,
-  customItems,
-  onToggle,
-  onAdd,
-  onAddCustom,
-  onRemoveCustom,
-}: CustomDishBuilderProps) {
+export function CustomDishBuilder(props: CustomDishBuilderProps) {
+  const { editMode } = props;
   return (
     <section aria-labelledby="builder-heading" className="tactile-raised rounded-3xl p-4 sm:p-6">
       <div className="mb-5">
@@ -339,22 +386,14 @@ export function CustomDishBuilder({
           Zelf samenstellen
         </h2>
         <p className="text-sm text-muted-foreground">
-          Tik op een ingrediënt om het toe te voegen. Tik nog eens om het terug te leggen. Mis je
-          iets? Voeg het toe en kies onder welke subtitel het hoort.
+          {editMode
+            ? "Bewerkmodus: tik op het kruisje om een ingrediënt voor iedereen uit de lijst te halen. Onderaan elke groep zet je verwijderde ingrediënten terug."
+            : "Tik op een ingrediënt om het toe te voegen. Tik nog eens om het terug te leggen. Mis je iets? Voeg het toe en kies onder welke subtitel het hoort."}
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {BUILDER_PILLARS.map((pillar) => (
-          <PillarCard
-            key={pillar.id}
-            pillar={pillar}
-            draft={draft}
-            customItems={customItems}
-            onToggle={onToggle}
-            onAdd={onAdd}
-            onAddCustom={onAddCustom}
-            onRemoveCustom={onRemoveCustom}
-          />
+          <PillarCard key={pillar.id} pillar={pillar} {...props} />
         ))}
       </div>
     </section>

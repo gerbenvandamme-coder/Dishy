@@ -26,6 +26,8 @@ interface SaveDishPanelProps {
   fromPlanner: boolean;
   /** True while the dish is being put on the weekmenu. */
   addingToWeek: boolean;
+  /** Confirmation after a one-off dish was placed from the day picker. */
+  placedLabel: string;
   onNameChange: (name: string) => void;
   onResetName: () => void;
   onPrepTimeChange: (prepTime: string) => void;
@@ -48,6 +50,7 @@ export function SaveDishPanel({
   replacesDishName,
   fromPlanner,
   addingToWeek,
+  placedLabel,
   onNameChange,
   onResetName,
   onPrepTimeChange,
@@ -117,11 +120,16 @@ export function SaveDishPanel({
       <p className="text-sm font-medium">
         {weekDateLabel
           ? `Het komt op ${weekDateLabel}.`
-          : "Je kiest daarna in de weekplanner zelf de dag."}
+          : "Je kiest daarna zelf de dag."}
       </p>
       {replacesDishName && (
         <p role="status" className="text-xs font-medium text-pillar-saus">
           Let op: {replacesDishName} staat al op die dag en wordt vervangen.
+        </p>
+      )}
+      {placedLabel && (
+        <p role="status" className="rounded-xl bg-sage-tint px-3 py-2 text-sm font-medium text-sage-ink">
+          {placedLabel}
         </p>
       )}
       <button

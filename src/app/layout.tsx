@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -18,6 +18,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Dishy",
   description: "Plan het weekmenu van je gezin en maak je Colruyt Xtra-lijst.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 const CABINET_GROTESK_CSS =
